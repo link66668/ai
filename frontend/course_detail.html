@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>课程详情 - 课程学习助手</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="page-wrapper">
+        <!-- 侧边栏 -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <h2>📚 学习助手</h2>
+            </div>
+            <nav class="sidebar-nav">
+                <a href="/dashboard.html" class="nav-item">
+                    <span class="icon">🏠</span> 仪表盘
+                </a>
+                <a href="/courses.html" class="nav-item active">
+                    <span class="icon">📖</span> 课程管理
+                </a>
+                <a href="/chat.html" class="nav-item">
+                    <span class="icon">💬</span> Agent对话
+                </a>
+                <a href="/tasks.html" class="nav-item">
+                    <span class="icon">✅</span> 任务管理
+                </a>
+                <a href="/plan.html" class="nav-item">
+                    <span class="icon">📅</span> 学习计划
+                </a>
+                <a href="/profile.html" class="nav-item">
+                    <span class="icon">👤</span> 个人中心
+                </a>
+            </nav>
+            <div class="sidebar-footer">
+                <button class="btn btn-outline btn-block" onclick="logout()">退出登录</button>
+            </div>
+        </aside>
+
+        <!-- 主内容 -->
+        <main class="main-content">
+            <div class="topbar">
+                <div>
+                    <a href="/courses.html" style="font-size:13px;">← 返回课程列表</a>
+                    <h1 id="courseName" style="margin-top:4px;">课程详情</h1>
+                </div>
+                <div class="topbar-actions">
+                    <button class="btn btn-outline" onclick="enterChat()">💬 进入对话</button>
+                </div>
+            </div>
+
+            <!-- 课程信息 -->
+            <div class="card mb-3">
+                <div class="card-body">
+                    <div style="display:flex; gap:30px; flex-wrap:wrap;">
+                        <div>
+                            <span class="text-muted">授课教师：</span>
+                            <span id="courseTeacher">-</span>
+                        </div>
+                        <div>
+                            <span class="text-muted">开课学期：</span>
+                            <span id="courseSemester">-</span>
+                        </div>
+                        <div>
+                            <span class="text-muted">课程学分：</span>
+                            <span id="courseCredit">-</span>
+                        </div>
+                        <div>
+                            <span class="text-muted">课程状态：</span>
+                            <span id="courseStatus">-</span>
+                        </div>
+                    </div>
+                    <p id="courseDesc" class="mt-2 text-muted" style="font-size:14px;"></p>
+                </div>
+            </div>
+
+            <!-- 标签页 -->
+            <div class="card">
+                <div class="card-body">
+                    <div class="tabs">
+                        <div class="tab-item active" data-tab="docs">课程资料</div>
+                        <div class="tab-item" data-tab="tasks">相关任务</div>
+                    </div>
+
+                    <!-- 资料面板 -->
+                    <div id="docsPanel">
+                        <div class="flex-between mb-2">
+                            <div style="display:flex; gap:8px;">
+                                <select class="form-control" style="width:140px;" id="categoryFilter" onchange="filterDocs()">
+                                    <option value="">全部分类</option>
+                                    <option value="课件">课件</option>
+                                    <option value="实验指导">实验指导</option>
+                                    <option value="作业">作业</option>
+                                    <option value="笔记">笔记</option>
+                                    <option value="其他">其他</option>
+                                </select>
+                                <input type="text" class="form-control" style="width:200px;" placeholder="搜索资料..." id="docSearch" oninput="searchDocs()">
+                            </div>
+                            <button class="btn btn-primary" onclick="showUploadModal()">📤 上传资料</button>
+                        </div>
+                        <div class="doc-grid" id="docList">
+                            <div class="loading"><div class="spinner"></div></div>
+                        </div>
+                    </div>
+
+                    <!-- 任务面板 -->
+                    <div id="tasksPanel" class="hidden">
+                        <div class="flex-between mb-2">
+                            <span class="text-muted" id="taskSummary">共 0 个任务</span>
+                            <button class="btn btn-primary" onclick="showTaskModal()">+ 新建任务</button>
+                        </div>
+                        <ul class="task-list" id="taskList">
+                            <div class="empty-state"><p>暂无任务</p></div>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- 上传资料模态框 -->
+    <div class="modal-overlay" id="uploadModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3>上传资料</h3>
+                <button class="modal-close" onclick="closeUploadModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="uploadForm">
+                    <div class="form-group">
+                        <label class="form-label">选择文件</label>
+                        <input type="file" class="form-control" id="uploadFile" required>
+                        <small class="text-muted">支持 txt、pdf、doc、ppt、xls、图片，最大10MB</small>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">资料分类</label>
+                        <select class="form-control" id="uploadCategory">
+                            <option value="课件">课件</option>
+                            <option value="实验指导">实验指导</option>
+                            <option value="作业">作业</option>
+                            <option value="笔记">笔记</option>
+                            <option value="其他">其他</option>
+                        </select>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeUploadModal()">取消</button>
+                <button class="btn btn-primary" id="uploadBtn" onclick="uploadDoc()">上传</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 创建任务模态框 -->
+    <div class="modal-overlay" id="taskModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3>新建任务</h3>
+                <button class="modal-close" onclick="closeTaskModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="taskForm">
+                    <div class="form-group">
+                        <label class="form-label">任务标题 *</label>
+                        <input type="text" class="form-control" id="taskTitle" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">任务描述</label>
+                        <textarea class="form-control" id="taskDesc" rows="2"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">任务类型</label>
+                        <select class="form-control" id="taskType">
+                            <option value="日常作业">日常作业</option>
+                            <option value="实验任务">实验任务</option>
+                            <option value="复习计划">复习计划</option>
+                            <option value="考试准备">考试准备</option>
+                            <option value="其他">其他</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">优先级</label>
+                        <select class="form-control" id="taskPriority">
+                            <option value="中">中</option>
+                            <option value="高">高</option>
+                            <option value="低">低</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">截止日期</label>
+                        <input type="date" class="form-control" id="taskDueDate">
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeTaskModal()">取消</button>
+                <button class="btn btn-primary" onclick="saveTask()">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/api.js"></script>
+    <script src="js/utils.js"></script>
+    <script>
+        if (!checkAuth()) throw new Error('未登录');
+
+        const courseId = parseInt(getUrlParam('id'));
+        if (!courseId) {
+            window.location.href = '/courses.html';
+        }
+
+        let course = null;
+        let allDocs = [];
+        let allTasks = [];
+
+        // 加载课程详情
+        async function loadCourse() {
+            try {
+                const result = await api.getCourse(courseId);
+                if (!result.data) {
+                    showToast('课程数据为空', 'error');
+                    return;
+                }
+                course = result.data;
+                renderCourseInfo();
+            } catch (error) {
+                console.error('加载课程失败:', error);
+                showToast('加载课程失败: ' + error.message, 'error');
+            }
+        }
+
+        function renderCourseInfo() {
+            document.getElementById('courseName').textContent = course.name;
+            document.getElementById('courseTeacher').textContent = course.teacher || '未设置';
+            document.getElementById('courseSemester').textContent = course.semester || '未设置';
+            document.getElementById('courseCredit').textContent = course.credit || 0;
+            document.getElementById('courseStatus').textContent = course.status === 'active' ? '进行中' : '已归档';
+            document.getElementById('courseDesc').textContent = course.description || '暂无简介';
+            document.title = `${course.name} - 课程学习助手`;
+        }
+
+        // 加载资料
+        async function loadDocs() {
+            try {
+                const result = await api.getDocuments(courseId);
+                allDocs = result.data || [];
+                renderDocs(allDocs);
+            } catch (error) {
+                console.error('加载资料失败:', error);
+                showToast('加载资料失败: ' + error.message, 'error');
+            }
+        }
+
+        function renderDocs(docs) {
+            const container = document.getElementById('docList');
+            if (!docs.length) {
+                container.innerHTML = '<div class="empty-state"><div class="icon">📄</div><h3>暂无资料</h3><p>点击上方按钮上传课程资料</p></div>';
+                return;
+            }
+
+            container.innerHTML = docs.map(doc => `
+                <div class="doc-card">
+                    <div class="doc-icon ${getFileIcon(doc.file_type)}">${getFileEmoji(doc.file_type)}</div>
+                    <div class="doc-info">
+                        <div class="doc-name" title="${doc.original_name}">${doc.original_name}</div>
+                        <div class="doc-meta">${doc.category} · ${formatFileSize(doc.file_size)}</div>
+                    </div>
+                    <button class="btn btn-sm btn-outline" onclick="previewDoc(${doc.id})">预览</button>
+                    <button class="btn btn-sm btn-danger" onclick="deleteDoc(${doc.id})">删除</button>
+                </div>
+            `).join('');
+        }
+
+        function filterDocs() {
+            const category = document.getElementById('categoryFilter').value;
+            const filtered = category ? allDocs.filter(d => d.category === category) : allDocs;
+            renderDocs(filtered);
+        }
+
+        function searchDocs() {
+            const keyword = document.getElementById('docSearch').value.trim().toLowerCase();
+            if (!keyword) {
+                renderDocs(allDocs);
+                return;
+            }
+            const filtered = allDocs.filter(d =>
+                d.original_name.toLowerCase().includes(keyword) ||
+                (d.content_text || '').toLowerCase().includes(keyword)
+            );
+            renderDocs(filtered);
+        }
+
+        // 上传资料
+        function showUploadModal() {
+            document.getElementById('uploadForm').reset();
+            document.getElementById('uploadModal').classList.add('active');
+        }
+
+        function closeUploadModal() {
+            document.getElementById('uploadModal').classList.remove('active');
+        }
+
+        async function uploadDoc() {
+            const fileInput = document.getElementById('uploadFile');
+            if (!fileInput.files.length) {
+                showToast('请选择文件', 'warning');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('file', fileInput.files[0]);
+            formData.append('course_id', courseId);
+            formData.append('category', document.getElementById('uploadCategory').value);
+
+            const btn = document.getElementById('uploadBtn');
+            btn.disabled = true;
+            btn.textContent = '上传中...';
+
+            try {
+                await api.uploadDocument(formData);
+                showToast('上传成功', 'success');
+                closeUploadModal();
+                loadDocs();
+            } catch (error) {
+                showToast(error.message || '上传失败', 'error');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '上传';
+            }
+        }
+
+        // 预览资料
+        async function previewDoc(id) {
+            const doc = allDocs.find(d => d.id === id);
+            if (!doc) return;
+
+            if (doc.file_type === 'txt' && doc.content_text) {
+                // 文本预览 - 在新窗口打开
+                const w = window.open('', '_blank');
+                w.document.write(`<html><head><title>${doc.original_name}</title>
+                    <style>body{font-family:sans-serif;padding:40px;max-width:800px;margin:0 auto;line-height:1.8;}</style>
+                </head><body><h2>${doc.original_name}</h2><pre style="white-space:pre-wrap;">${doc.content_text}</pre></body></html>`);
+            } else {
+                window.open(`/api/documents/${id}/preview`, '_blank');
+            }
+        }
+
+        // 删除资料
+        async function deleteDoc(id) {
+            if (!await confirmDialog('确定删除该资料？')) return;
+            try {
+                await api.deleteDocument(id);
+                showToast('删除成功', 'success');
+                loadDocs();
+            } catch (error) {
+                showToast('操作失败', 'error');
+            }
+        }
+
+        // 加载任务
+        async function loadTasks() {
+            try {
+                const result = await api.getTasks(null, courseId);
+                allTasks = result.data || [];
+                document.getElementById('taskSummary').textContent = `共 ${allTasks.length} 个任务`;
+                renderTasks();
+            } catch (error) {
+                console.error('加载任务失败:', error);
+                showToast('加载任务失败: ' + error.message, 'error');
+            }
+        }
+
+        function renderTasks() {
+            const container = document.getElementById('taskList');
+            if (!allTasks.length) {
+                container.innerHTML = '<div class="empty-state"><p>暂无任务</p></div>';
+                return;
+            }
+
+            container.innerHTML = allTasks.map(task => `
+                <li class="task-item ${task.status === '已完成' ? 'completed' : ''}">
+                    <div class="task-checkbox" onclick="toggleTask(${task.id})">
+                        ${task.status === '已完成' ? '✓' : ''}
+                    </div>
+                    <div class="task-info">
+                        <div class="task-title">${task.title}</div>
+                        <div class="task-meta">
+                            <span class="task-priority ${getPriorityClass(task.priority)}">${task.priority}</span>
+                            <span>${task.task_type}</span>
+                            ${task.due_date ? ` · 截止: ${formatDate(task.due_date)}` : ''}
+                        </div>
+                    </div>
+                    <button class="btn btn-sm btn-outline" onclick="decomposeTask(${task.id})">分解</button>
+                    <button class="btn btn-sm btn-danger" onclick="deleteTask(${task.id})">删除</button>
+                </li>
+            `).join('');
+        }
+
+        function showTaskModal() {
+            document.getElementById('taskForm').reset();
+            document.getElementById('taskModal').classList.add('active');
+        }
+
+        function closeTaskModal() {
+            document.getElementById('taskModal').classList.remove('active');
+        }
+
+        async function saveTask() {
+            const title = document.getElementById('taskTitle').value.trim();
+            if (!title) {
+                showToast('请填写任务标题', 'warning');
+                return;
+            }
+
+            try {
+                await api.createTask({
+                    title,
+                    description: document.getElementById('taskDesc').value.trim(),
+                    course_id: courseId,
+                    task_type: document.getElementById('taskType').value,
+                    priority: document.getElementById('taskPriority').value,
+                    due_date: document.getElementById('taskDueDate').value || null
+                });
+                showToast('创建成功', 'success');
+                closeTaskModal();
+                loadTasks();
+            } catch (error) {
+                showToast(error.message || '创建失败', 'error');
+            }
+        }
+
+        async function toggleTask(id) {
+            try {
+                await api.completeTask(id);
+                showToast('任务已完成', 'success');
+                loadTasks();
+            } catch (error) {
+                showToast('操作失败', 'error');
+            }
+        }
+
+        async function deleteTask(id) {
+            if (!await confirmDialog('确定删除该任务？')) return;
+            try {
+                await api.deleteTask(id);
+                showToast('删除成功', 'success');
+                loadTasks();
+            } catch (error) {
+                showToast('操作失败', 'error');
+            }
+        }
+
+        async function decomposeTask(id) {
+            try {
+                await api.decomposeTask(id);
+                showToast('任务已分解', 'success');
+                loadTasks();
+            } catch (error) {
+                showToast(error.message || '分解失败', 'error');
+            }
+        }
+
+        // 进入对话
+        function enterChat() {
+            window.location.href = `/chat.html?course_id=${courseId}`;
+        }
+
+        // 标签页切换
+        document.querySelectorAll('.tab-item').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.tab-item').forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+                const tabName = tab.dataset.tab;
+                document.getElementById('docsPanel').classList.toggle('hidden', tabName !== 'docs');
+                document.getElementById('tasksPanel').classList.toggle('hidden', tabName !== 'tasks');
+            });
+        });
+
+        // 初始化
+        loadCourse();
+        loadDocs();
+        loadTasks();
+    </script>
+</body>
+</html>

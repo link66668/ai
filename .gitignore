@@ -1,0 +1,59 @@
+# ===== Python =====
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+*.whl
+
+# ===== 虚拟环境 =====
+venv/
+.venv/
+env/
+ENV/
+
+# ===== 数据库（隐私数据，禁止上传）=====
+backend/course_agent.db
+backend/*.db
+backend/*.sqlite
+backend/*.sqlite3
+
+# ===== 用户上传文件（隐私数据，禁止上传）=====
+backend/uploads/
+
+# ===== 环境变量 / 密钥文件 =====
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# ===== IDE / 编辑器 =====
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.classpath
+.settings/
+
+# ===== 操作系统 =====
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ===== 日志 =====
+*.log
+
+# ===== 临时文件 =====
+*.tmp
+*.bak
+*.swp
+
+# ===== 其他 =====
+instance/
+*.out

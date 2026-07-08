@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>学习计划 - 课程学习助手</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="page-wrapper">
+        <!-- 侧边栏 -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <h2>📚 学习助手</h2>
+            </div>
+            <nav class="sidebar-nav">
+                <a href="/dashboard.html" class="nav-item">
+                    <span class="icon">🏠</span> 仪表盘
+                </a>
+                <a href="/courses.html" class="nav-item">
+                    <span class="icon">📖</span> 课程管理
+                </a>
+                <a href="/chat.html" class="nav-item">
+                    <span class="icon">💬</span> Agent对话
+                </a>
+                <a href="/tasks.html" class="nav-item">
+                    <span class="icon">✅</span> 任务管理
+                </a>
+                <a href="/plan.html" class="nav-item active">
+                    <span class="icon">📅</span> 学习计划
+                </a>
+                <a href="/profile.html" class="nav-item">
+                    <span class="icon">👤</span> 个人中心
+                </a>
+            </nav>
+            <div class="sidebar-footer">
+                <button class="btn btn-outline btn-block" onclick="logout()">退出登录</button>
+            </div>
+        </aside>
+
+        <!-- 主内容 -->
+        <main class="main-content">
+            <div class="topbar">
+                <h1>学习计划</h1>
+                <div class="topbar-actions">
+                    <button class="btn btn-success" onclick="showGenerateModal()">🤖 AI生成计划</button>
+                    <button class="btn btn-primary" onclick="showCreateModal()">+ 手动创建</button>
+                </div>
+            </div>
+
+            <!-- 计划列表 -->
+            <div id="planList">
+                <div class="loading"><div class="spinner"></div></div>
+            </div>
+        </main>
+    </div>
+
+    <!-- AI生成计划模态框 -->
+    <div class="modal-overlay" id="generateModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3>🤖 AI生成学习计划</h3>
+                <button class="modal-close" onclick="closeGenerateModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="generateForm">
+                    <div class="form-group">
+                        <label class="form-label">选择课程 *</label>
+                        <select class="form-control" id="genCourse" required>
+                            <option value="">请选择课程</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">学习目标</label>
+                        <textarea class="form-control" id="genGoal" rows="3" placeholder="如：掌握微积分基础，期末考试达到85分以上"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">考试/截止日期</label>
+                        <input type="date" class="form-control" id="genExamDate">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">每日学习时长（小时）</label>
+                        <input type="number" class="form-control" id="genDailyHours" step="0.5" min="0.5" max="12" value="2">
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeGenerateModal()">取消</button>
+                <button class="btn btn-success" id="generateBtn" onclick="generatePlan()">🤖 生成计划</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 手动创建计划模态框 -->
+    <div class="modal-overlay" id="createModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3>手动创建计划</h3>
+                <button class="modal-close" onclick="closeCreateModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="createForm">
+                    <div class="form-group">
+                        <label class="form-label">计划标题 *</label>
+                        <input type="text" class="form-control" id="planTitle" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">选择课程 *</label>
+                        <select class="form-control" id="planCourse" required>
+                            <option value="">请选择课程</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">学习目标</label>
+                        <textarea class="form-control" id="planGoal" rows="2"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">考试日期</label>
+                        <input type="date" class="form-control" id="planExamDate">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">每日学习时长（小时）</label>
+                        <input type="number" class="form-control" id="planDailyHours" step="0.5" min="0.5" max="12" value="2">
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeCreateModal()">取消</button>
+                <button class="btn btn-primary" onclick="savePlan()">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 计划详情模态框 -->
+    <div class="modal-overlay" id="detailModal">
+        <div class="modal" style="max-width:600px;">
+            <div class="modal-header">
+                <h3 id="detailTitle">计划详情</h3>
+                <button class="modal-close" onclick="closeDetailModal()">&times;</button>
+            </div>
+            <div class="modal-body" id="detailContent">
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeDetailModal()">关闭</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/api.js"></script>
+    <script src="js/utils.js"></script>
+    <script>
+        if (!checkAuth()) throw new Error('未登录');
+
+        let courses = [];
+        let plans = [];
+
+        // 加载课程
+        async function loadCourses() {
+            try {
+                const result = await api.getCourses();
+                courses = result.data || [];
+                const options = courses.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+                document.getElementById('genCourse').innerHTML = '<option value="">请选择课程</option>' + options;
+                document.getElementById('planCourse').innerHTML = '<option value="">请选择课程</option>' + options;
+            } catch (error) {
+                console.error(error);
+            }
+        }
+
+        // 加载计划
+        async function loadPlans() {
+            try {
+                const result = await api.getPlans();
+                plans = result.data || [];
+                renderPlans();
+            } catch (error) {
+                showToast('加载计划失败', 'error');
+            }
+        }
+
+        function renderPlans() {
+            const container = document.getElementById('planList');
+
+            if (!plans.length) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <div class="icon">📅</div>
+                        <h3>暂无学习计划</h3>
+                        <p>点击"AI生成计划"快速创建，或"手动创建"自定义</p>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = plans.map(plan => {
+                const course = courses.find(c => c.id === plan.course_id);
+                const planData = plan.plan_data || {};
+
+                return `
+                    <div class="card mb-2" style="cursor:pointer;" onclick="showPlanDetail(${plan.id})">
+                        <div class="card-body">
+                            <div class="flex-between">
+                                <div>
+                                    <h3 style="font-size:18px; margin-bottom:8px;">${plan.title}</h3>
+                                    <div class="text-muted" style="font-size:13px;">
+                                        <span>📖 ${course ? course.name : '未知课程'}</span>
+                                        ${plan.exam_date ? ` · <span>📅 考试: ${formatDate(plan.exam_date)}</span>` : ''}
+                                        · <span>⏰ 每日${plan.daily_hours}小时</span>
+                                    </div>
+                                    ${plan.goal ? `<p class="mt-1 text-muted" style="font-size:14px;">${plan.goal}</p>` : ''}
+                                </div>
+                                <div style="display:flex; gap:8px;">
+                                    <button class="btn btn-sm btn-outline" onclick="event.stopPropagation(); showPlanDetail(${plan.id})">查看</button>
+                                    <button class="btn btn-sm btn-danger" onclick="event.stopPropagation(); deletePlan(${plan.id})">删除</button>
+                                </div>
+                            </div>
+                            ${planData.phases ? `
+                                <div style="display:flex; gap:16px; margin-top:12px;">
+                                    ${planData.phases.map(p => `
+                                        <div style="flex:1; padding:8px 12px; background:var(--gray-50); border-radius:var(--radius);">
+                                            <div style="font-weight:600; font-size:13px;">${p.name}</div>
+                                            <div style="font-size:12px; color:var(--gray-500);">${p.days}天 - ${p.focus}</div>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            ` : ''}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // AI生成计划
+        function showGenerateModal() {
+            document.getElementById('generateForm').reset();
+            document.getElementById('generateModal').classList.add('active');
+        }
+
+        function closeGenerateModal() {
+            document.getElementById('generateModal').classList.remove('active');
+        }
+
+        async function generatePlan() {
+            const courseId = document.getElementById('genCourse').value;
+            if (!courseId) {
+                showToast('请选择课程', 'warning');
+                return;
+            }
+
+            const course = courses.find(c => c.id === parseInt(courseId));
+            const btn = document.getElementById('generateBtn');
+            btn.disabled = true;
+            btn.textContent = '生成中...';
+
+            try {
+                await api.generatePlan({
+                    course_id: parseInt(courseId),
+                    goal: document.getElementById('genGoal').value.trim(),
+                    exam_date: document.getElementById('genExamDate').value || null,
+                    daily_hours: parseFloat(document.getElementById('genDailyHours').value) || 2
+                });
+                showToast('计划生成成功！', 'success');
+                closeGenerateModal();
+                loadPlans();
+            } catch (error) {
+                showToast(error.message || '生成失败', 'error');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '🤖 生成计划';
+            }
+        }
+
+        // 手动创建
+        function showCreateModal() {
+            document.getElementById('createForm').reset();
+            document.getElementById('createModal').classList.add('active');
+        }
+
+        function closeCreateModal() {
+            document.getElementById('createModal').classList.remove('active');
+        }
+
+        async function savePlan() {
+            const title = document.getElementById('planTitle').value.trim();
+            const courseId = document.getElementById('planCourse').value;
+
+            if (!title || !courseId) {
+                showToast('请填写必填项', 'warning');
+                return;
+            }
+
+            try {
+                await api.createPlan({
+                    title,
+                    course_id: parseInt(courseId),
+                    goal: document.getElementById('planGoal').value.trim(),
+                    exam_date: document.getElementById('planExamDate').value || null,
+                    daily_hours: parseFloat(document.getElementById('planDailyHours').value) || 2
+                });
+                showToast('创建成功', 'success');
+                closeCreateModal();
+                loadPlans();
+            } catch (error) {
+                showToast(error.message || '创建失败', 'error');
+            }
+        }
+
+        // 查看计划详情
+        async function showPlanDetail(id) {
+            try {
+                const result = await api.getPlan(id);
+                const plan = result.data;
+                const planData = plan.plan_data || {};
+                const course = courses.find(c => c.id === plan.course_id);
+
+                document.getElementById('detailTitle').textContent = plan.title;
+
+                let html = `
+                    <div class="mb-2">
+                        <span class="text-muted">课程：</span>${course ? course.name : '未知'}
+                        ${plan.exam_date ? ` · <span class="text-muted">考试日期：</span>${formatDate(plan.exam_date)}` : ''}
+                    </div>
+                    ${plan.goal ? `<div class="mb-2"><span class="text-muted">目标：</span>${plan.goal}</div>` : ''}
+                `;
+
+                if (planData.phases) {
+                    html += '<h4 class="mb-1">学习阶段</h4><div class="plan-timeline">';
+                    planData.phases.forEach(phase => {
+                        html += `
+                            <div class="plan-phase">
+                                <h4>${phase.name}</h4>
+                                <p>${phase.focus} · ${phase.days}天</p>
+                            </div>
+                        `;
+                    });
+                    html += '</div>';
+                }
+
+                if (planData.daily_schedule) {
+                    html += '<h4 class="mt-2 mb-1">每日安排</h4>';
+                    planData.daily_schedule.forEach(day => {
+                        html += `
+                            <div style="padding:8px 0; border-bottom:1px solid var(--gray-100);">
+                                <strong>${day.date} (${day.weekday})</strong>
+                                <div class="text-muted" style="font-size:13px;">
+                                    ${day.tasks.join(' → ')}
+                                </div>
+                            </div>
+                        `;
+                    });
+                }
+
+                document.getElementById('detailContent').innerHTML = html;
+                document.getElementById('detailModal').classList.add('active');
+            } catch (error) {
+                showToast('加载详情失败', 'error');
+            }
+        }
+
+        function closeDetailModal() {
+            document.getElementById('detailModal').classList.remove('active');
+        }
+
+        // 删除计划
+        async function deletePlan(id) {
+            if (!await confirmDialog('确定删除该计划？')) return;
+            try {
+                await api.deletePlan(id);
+                showToast('删除成功', 'success');
+                loadPlans();
+            } catch (error) {
+                showToast('操作失败', 'error');
+            }
+        }
+
+        // 初始化
+        loadCourses().then(() => loadPlans());
+    </script>
+</body>
+</html>

@@ -1,0 +1,18 @@
+# Flask核心框架
+Flask==3.0.0
+Flask-CORS==4.0.0
+
+# 数据库（SQLite为Python内置，无需额外安装）
+
+# 密码加密
+bcrypt==4.1.2
+
+# JWT认证
+PyJWT==2.8.0
+
+# 文件处理
+Werkzeug==3.0.1
+python-multipart==0.0.6
+
+# 其他工具
+python-dotenv==1.0.0

@@ -1,0 +1,1170 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>任务管理 - 课程学习助手</title>
+    <link rel="stylesheet" href="css/style.css">
+    <style>
+        :root {
+            --primary: #4f46e5;
+            --primary-light: #eef2ff;
+            --danger: #ef4444;
+            --danger-light: #fef2f2;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --gray-50: #f9fafb;
+            --gray-100: #f3f4f6;
+            --gray-200: #e5e7eb;
+            --gray-300: #d1d5db;
+            --gray-400: #9ca3af;
+            --gray-500: #6b7280;
+            --gray-700: #374151;
+            --gray-900: #111827;
+            --radius: 10px;
+            --shadow: 0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.06);
+            --shadow-md: 0 4px 6px rgba(0,0,0,.07), 0 2px 4px rgba(0,0,0,.06);
+        }
+
+        .course-colors {
+            --math: #818cf8; --math-bg: #e0e7ff;
+            --english: #fbbf24; --english-bg: #fef3c7;
+            --python: #4ade80; --python-bg: #dcfce7;
+            --data: #38bdf8; --data-bg: #e0f2fe;
+            --algo: #a78bfa; --algo-bg: #f3e8ff;
+            --physics: #fb923c; --physics-bg: #fff7ed;
+            --review: #9ca3af; --review-bg: #f3f4f6;
+        }
+
+        /* ===== 智能拆解面板 ===== */
+        .decompose-panel {
+            background: linear-gradient(135deg, #f0f4ff 0%, #ffffff 40%, #faf5ff 100%);
+            border: 2px dashed var(--primary);
+            border-radius: var(--radius);
+            margin-bottom: 20px;
+            overflow: hidden;
+            transition: all .3s;
+        }
+        .decompose-panel.collapsed .dp-body { display: none; }
+        .dp-header {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 14px 20px; cursor: pointer; user-select: none;
+        }
+        .dp-header h2 { margin: 0; font-size: 16px; display: flex; align-items: center; gap: 8px; }
+        .dp-toggle { font-size: 12px; color: var(--gray-400); transition: transform .3s; }
+        .decompose-panel.collapsed .dp-toggle { transform: rotate(-90deg); }
+        .dp-body { padding: 0 20px 20px; }
+        .dp-input-row { display: flex; gap: 10px; align-items: stretch; flex-wrap: wrap; }
+        .dp-input-row textarea {
+            flex: 1; min-width: 260px; padding: 10px 14px; border: 1px solid var(--gray-300);
+            border-radius: 8px; font-size: 14px; resize: vertical; min-height: 56px; font-family: inherit;
+            line-height: 1.5; transition: border-color .2s;
+        }
+        .dp-input-row textarea:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(79,70,229,.1); }
+        .dp-input-row select { padding: 0 12px; border: 1px solid var(--gray-300); border-radius: 8px; font-size: 14px; min-width: 130px; }
+        .dp-input-row .btn-decompose { padding: 0 20px; white-space: nowrap; font-weight: 600; }
+        .dp-hint { font-size: 12px; color: var(--gray-400); margin-top: 6px; display: flex; gap: 16px; flex-wrap: wrap; }
+        .dp-hint span { display: flex; align-items: center; gap: 4px; }
+
+        /* ===== 拆解结果 - 日课表 ===== */
+        .dp-result { margin-top: 16px; display: none; }
+        .dp-result.active { display: block; }
+        .dp-result-header {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 12px 16px; background: var(--primary-light); border-radius: 8px; margin-bottom: 12px;
+        }
+        .dp-result-header h3 { margin: 0; font-size: 15px; }
+        .dp-result-meta { font-size: 12px; color: var(--gray-500); display: flex; gap: 12px; }
+        .dp-result-meta span { display: flex; align-items: center; gap: 4px; }
+
+        /* 日课表卡片 */
+        .timetable { display: grid; gap: 14px; }
+        .timetable-day {
+            border: 1px solid var(--gray-200); border-radius: 8px; overflow: hidden;
+            background: #fff; box-shadow: var(--shadow);
+        }
+        .timetable-day-header {
+            background: var(--gray-50); padding: 8px 14px; font-size: 13px; font-weight: 600;
+            color: var(--gray-700); display: flex; align-items: center; gap: 8px;
+        }
+        .timetable-day-header .day-badge {
+            background: var(--primary); color: #fff; font-size: 11px; padding: 2px 8px; border-radius: 10px;
+        }
+        .timetable-slot {
+            display: flex; align-items: flex-start; gap: 10px; padding: 10px 14px;
+            border-bottom: 1px solid var(--gray-100); transition: background .15s;
+        }
+        .timetable-slot:last-child { border-bottom: none; }
+        .timetable-slot:hover { background: var(--gray-50); }
+        .slot-time {
+            min-width: 72px; font-size: 11px; color: var(--gray-400); font-family: 'SF Mono', Monaco, monospace;
+            padding-top: 2px; text-align: right;
+        }
+        .slot-course {
+            display: inline-block; padding: 1px 7px; border-radius: 4px; font-size: 10px; font-weight: 700;
+            text-transform: uppercase; letter-spacing: .5px; margin-bottom: 3px;
+        }
+        .slot-body { flex: 1; min-width: 0; }
+        .slot-title { font-size: 13px; font-weight: 500; color: var(--gray-900); }
+        .slot-desc { font-size: 11px; color: var(--gray-500); margin-top: 2px; line-height: 1.4; }
+        .slot-hours { font-size: 11px; color: var(--gray-400); white-space: nowrap; padding-top: 2px; }
+        .slot-hours::after { content: 'h'; }
+
+        /* 旧版简单的任务列表 */
+        .simple-task-list .task-item { padding: 6px 14px; border-bottom: 1px solid var(--gray-100); font-size: 13px; display: flex; align-items: center; gap: 10px; }
+        .simple-task-list .task-num { color: var(--primary); font-weight: 600; min-width: 36px; font-size: 12px; }
+
+        .dp-actions { display: flex; gap: 10px; margin-top: 16px; }
+        .dp-loading { text-align: center; padding: 30px; display: none; }
+        .dp-loading.active { display: block; }
+
+        /* ===== 批量操作栏 ===== */
+        .batch-bar {
+            display: none; align-items: center; gap: 8px; padding: 8px 16px;
+            background: var(--primary-light); border-radius: 8px; margin-bottom: 8px;
+            animation: batchSlideIn .2s ease;
+        }
+        @keyframes batchSlideIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
+        .batch-bar.active { display: flex; }
+        .batch-count { font-size: 13px; font-weight: 600; color: var(--primary); margin-right: 4px; }
+        .batch-bar .btn-xs { padding: 3px 10px; font-size: 11px; border-radius: 5px; border: 1px solid transparent; cursor: pointer; font-weight: 500; }
+        .btn-xs-danger { background: var(--danger-light); color: var(--danger); border-color: var(--danger); }
+        .btn-xs-danger:hover { background: var(--danger); color: #fff; }
+        .btn-xs-success { background: #ecfdf5; color: var(--success); border-color: var(--success); }
+        .btn-xs-success:hover { background: var(--success); color: #fff; }
+        .btn-xs-ghost { background: #fff; color: var(--gray-500); border-color: var(--gray-300); }
+        .btn-xs-ghost:hover { background: var(--gray-100); }
+
+        /* ===== 选择行 ===== */
+        .select-row { display: flex; align-items: center; gap: 8px; padding: 4px 4px 8px; font-size: 12px; color: var(--gray-500); cursor: pointer; user-select: none; }
+        .select-row input { width: 15px; height: 15px; accent-color: var(--primary); cursor: pointer; }
+
+        /* ===== 任务列表 ===== */
+        .task-list { list-style: none; padding: 0; margin: 0; }
+        .task-row { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--gray-100); transition: background .15s; }
+        .task-row:hover { background: var(--gray-50); }
+        .task-row:last-child { border-bottom: none; }
+        .task-row.completed { opacity: .6; }
+        .task-row.completed .task-row-title { text-decoration: line-through; color: var(--gray-400); }
+        .task-check { flex-shrink: 0; display: flex; }
+        .task-check input { width: 15px; height: 15px; accent-color: var(--primary); cursor: pointer; margin: 0; }
+        .task-dot {
+            flex-shrink: 0; width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--gray-300);
+            display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 10px;
+            transition: all .2s; color: transparent;
+        }
+        .task-dot:hover { border-color: var(--primary); }
+        .task-row.completed .task-dot { background: var(--success); border-color: var(--success); color: #fff; }
+        .task-row-body { flex: 1; min-width: 0; }
+        .task-row-title { font-size: 14px; font-weight: 500; color: var(--gray-900); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .task-row-meta { font-size: 11px; color: var(--gray-400); margin-top: 2px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+        .task-row-meta .badge { display: inline-block; padding: 1px 6px; border-radius: 3px; font-size: 10px; font-weight: 600; }
+        .badge-high { background: #fef2f2; color: #dc2626; }
+        .badge-mid { background: #fffbeb; color: #d97706; }
+        .badge-low { background: #f3f4f6; color: #6b7280; }
+        .task-row-actions { display: flex; gap: 4px; flex-shrink: 0; }
+        .btn-icon {
+            padding: 4px 8px; font-size: 11px; border-radius: 5px; border: 1px solid var(--gray-200);
+            background: #fff; color: var(--gray-500); cursor: pointer; transition: all .15s; white-space: nowrap;
+        }
+        .btn-icon:hover { border-color: var(--primary); color: var(--primary); }
+        .btn-icon-danger:hover { border-color: var(--danger); color: var(--danger); }
+        .btn-icon-success:hover { border-color: var(--success); color: var(--success); }
+
+        /* ===== 筛选栏 ===== */
+        .filter-bar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
+        .filter-bar select { padding: 6px 10px; border: 1px solid var(--gray-300); border-radius: 6px; font-size: 13px; background: #fff; }
+        .filter-bar .spacer { flex: 1; }
+        .filter-summary { font-size: 12px; color: var(--gray-400); }
+
+        /* ===== 空状态 ===== */
+        .empty-state { text-align: center; padding: 40px 20px; }
+        .empty-state .icon { font-size: 40px; margin-bottom: 12px; }
+        .empty-state h3 { margin: 0 0 4px; font-size: 16px; color: var(--gray-700); }
+        .empty-state p { margin: 0; font-size: 13px; color: var(--gray-400); }
+
+        /* ===== 加载 ===== */
+        .spinner-sm { width: 20px; height: 20px; border: 2px solid var(--gray-200); border-top-color: var(--primary); border-radius: 50%; animation: spin .6s linear infinite; margin: 0 auto; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* ===== 周课表格视图 ===== */
+        .view-toggle { display: flex; gap: 0; border: 1px solid var(--gray-300); border-radius: 6px; overflow: hidden; }
+        .view-toggle button { padding: 5px 12px; font-size: 12px; border: none; background: #fff; color: var(--gray-500); cursor: pointer; transition: all .15s; }
+        .view-toggle button.active { background: var(--primary); color: #fff; }
+        .view-toggle button:hover:not(.active) { background: var(--gray-50); }
+        .tg-grid { display: none; gap: 0; border: 1px solid var(--gray-200); border-radius: 10px; overflow-x: auto; background: #fff; box-shadow: var(--shadow); }
+        .tg-grid.active { display: grid; }
+        .tg-corner { background: var(--gray-50); padding: 21px 15px; font-size: 21px; color: var(--gray-600); text-align: center; font-weight: 700; border-right: 1px solid var(--gray-200); border-bottom: 1px solid var(--gray-200); }
+        .tg-day-header { background: var(--gray-50); padding: 18px 12px; text-align: center; border-right: 1px solid var(--gray-200); border-bottom: 1px solid var(--gray-200); }
+        .tg-day-header .day-name { font-weight: 700; color: var(--gray-700); font-size: 23px; }
+        .tg-day-header .day-date { color: var(--gray-400); margin-top: 5px; font-size: 18px; }
+        .tg-day-header.today { background: var(--primary-light); }
+        .tg-day-header.today .day-name { color: var(--primary); }
+        .tg-time-label { background: var(--gray-50); padding: 15px 12px; font-size: 20px; color: var(--gray-600); text-align: center; font-weight: 600; border-right: 1px solid var(--gray-200); border-bottom: 1px solid var(--gray-100); display: flex; align-items: center; justify-content: center; }
+        .tg-cell { padding: 8px 8px; border-right: 1px solid var(--gray-100); border-bottom: 1px solid var(--gray-100); overflow-y: auto; }
+        .tg-cell:hover { background: #fafafa; }
+        .tg-chip { display: block; padding: 8px 12px; margin-bottom: 6px; border-radius: 6px; font-size: 20px; line-height: 1.45; cursor: grab; border: 1px solid transparent; position: relative; }
+        .tg-chip:active { cursor: grabbing; }
+        .tg-chip:hover { filter: brightness(.94); }
+        .tg-chip .tg-chip-title { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .tg-chip .tg-chip-desc { font-size: 17px; opacity: .75; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .tg-chip.completed .tg-chip-title { text-decoration: line-through; opacity: .5; }
+        .tg-chip.selected { outline: 3px solid var(--primary); outline-offset: 2px; }
+        .tg-chip.dragging { opacity: .4; }
+        .tg-chip .tg-chip-check { position: absolute; top: 3px; right: 5px; width: 23px; height: 23px; border-radius: 5px; border: 2px solid var(--gray-300); background: #fff; display: none; align-items: center; justify-content: center; font-size: 15px; }
+        .tg-chip:hover .tg-chip-check { display: flex; }
+        .tg-chip.selected .tg-chip-check { display: flex; background: var(--primary); color: #fff; border-color: var(--primary); }
+        .tg-empty-cell { border-right: 1px solid var(--gray-100); border-bottom: 1px solid var(--gray-100); }
+        .tg-cell.drag-over { background: #eef2ff; outline: 3px dashed var(--primary); outline-offset: -3px; }
+        .tg-empty-cell.drag-over { background: #eef2ff; outline: 3px dashed var(--primary); outline-offset: -3px; }
+        .tg-view-legend { font-size: 17px; color: var(--gray-400); display: flex; gap: 14px; margin-bottom: 10px; align-items: center; }
+        .tg-view-legend span { display: flex; align-items: center; gap: 4px; }
+        .tg-view-legend .chip-demo { display: inline-block; width: 18px; height: 18px; border-radius: 3px; }
+        .week-pager { display: flex; align-items: center; gap: 15px; margin-bottom: 15px; }
+        .week-pager .pager-btn { padding: 6px 18px; font-size: 18px; border: 2px solid var(--gray-300); border-radius: 8px; background: #fff; color: var(--gray-700); cursor: pointer; transition: all .15s; }
+        .week-pager .pager-btn:hover { border-color: var(--primary); color: var(--primary); }
+        .week-pager .pager-btn:disabled { opacity: .4; cursor: not-allowed; }
+        .week-pager .pager-btn.today-btn { font-weight: 600; border-color: var(--primary); color: var(--primary); }
+        .week-pager .week-label { font-size: 21px; font-weight: 600; color: var(--gray-700); min-width: 300px; text-align: center; }
+        .week-hint { font-size: 17px; color: var(--gray-400); text-align: center; margin-top: 15px; }
+        .select-row { display: flex; align-items: center; gap: 12px; padding: 6px 8px 12px; font-size: 18px; color: var(--gray-500); cursor: pointer; user-select: none; }
+        .select-row input { width: 23px; height: 23px; accent-color: var(--primary); cursor: pointer; }
+    </style>
+</head>
+<body>
+    <div class="page-wrapper">
+        <!-- 侧边栏 -->
+        <aside class="sidebar">
+            <div class="sidebar-header"><h2>📚 学习助手</h2></div>
+            <nav class="sidebar-nav">
+                <a href="/dashboard.html" class="nav-item"><span class="icon">🏠</span> 仪表盘</a>
+                <a href="/courses.html" class="nav-item"><span class="icon">📖</span> 课程管理</a>
+                <a href="/chat.html" class="nav-item"><span class="icon">💬</span> Agent 对话</a>
+                <a href="/tasks.html" class="nav-item active"><span class="icon">✅</span> 任务管理</a>
+                <a href="/plan.html" class="nav-item"><span class="icon">📅</span> 学习计划</a>
+                <a href="/profile.html" class="nav-item"><span class="icon">👤</span> 个人中心</a>
+            </nav>
+            <div class="sidebar-footer">
+                <button class="btn btn-outline btn-block" onclick="logout()">退出登录</button>
+            </div>
+        </aside>
+
+        <!-- 主内容 -->
+        <main class="main-content">
+            <div class="topbar">
+                <h1>✅ 任务管理</h1>
+                <div class="topbar-actions">
+                    <button class="btn btn-primary" onclick="showCreateModal()">+ 新建任务</button>
+                </div>
+            </div>
+
+            <!-- ========== 1️⃣ 智能任务拆解面板 ========== -->
+            <div class="decompose-panel" id="decomposePanel">
+                <div class="dp-header" onclick="toggleDecomposePanel()">
+                    <h2>🧠 智能任务拆解 <span style="font-size:11px;font-weight:400;color:var(--gray-400);">大模型驱动 · 支持多课程编排</span></h2>
+                    <span class="dp-toggle">▼</span>
+                </div>
+                <div class="dp-body">
+                    <div class="dp-input-row">
+                        <textarea id="sdGoalInput" placeholder="描述你的学习目标，系统自动拆解&#10;例如：两周复习完高等数学期末考试&#10;例如：两周内复习完高等数学和大学英语&#10;例如：一个月学完 Python 和数据结构，每天 3 小时"></textarea>
+                        <select id="sdCourseSelect"><option value="">自动匹配课程</option></select>
+                        <button class="btn btn-primary btn-decompose" onclick="smartDecompose()" id="sdBtn">🔍 拆解</button>
+                    </div>
+                    <div class="dp-hint">
+                        <span>💡 支持单课程和多课程</span>
+                        <span>📅 自动识别 X天/X周/一个月</span>
+                        <span>🤖 大模型生成详细行动指南</span>
+                        <span>📋 多课程自动编排日课表</span>
+                    </div>
+
+                    <div class="dp-loading" id="sdLoading">
+                        <div class="spinner-sm"></div>
+                        <p style="color:var(--gray-400);font-size:13px;margin-top:8px;">正在调用大模型分析并生成详细任务规划...</p>
+                    </div>
+
+                    <div class="dp-result" id="sdResult">
+                        <div class="dp-result-header">
+                            <div>
+                                <h3 id="sdResultTitle"></h3>
+                                <div class="dp-result-meta" id="sdResultMeta"></div>
+                            </div>
+                            <div style="font-size:12px;color:var(--gray-400);">
+                                by <span style="font-weight:600;color:var(--primary);">DeepSeek</span>
+                            </div>
+                        </div>
+                        <div id="sdTimetable"></div>
+                        <div class="dp-actions">
+                            <button class="btn btn-primary" onclick="createAllDecomposedTasks()">✅ 全部创建为任务</button>
+                            <button class="btn btn-secondary" onclick="clearDecomposeResult()">清空</button>
+                            <span style="font-size:12px;color:var(--gray-400);margin-left:auto;display:flex;align-items:center;gap:4px;">
+                                ⚠️ 请在下方筛选栏选择关联课程后再创建
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ========== 2️⃣ 筛选栏 ========== -->
+            <div class="filter-bar">
+                <select id="statusFilter" onchange="loadTasks()">
+                    <option value="">全部状态</option>
+                    <option value="待办">待办</option>
+                    <option value="进行中">进行中</option>
+                    <option value="已完成">已完成</option>
+                </select>
+                <select id="courseFilter" onchange="loadTasks()">
+                    <option value="">全部课程</option>
+                </select>
+                <div class="spacer"></div>
+                <div class="view-toggle">
+                    <button class="active" id="viewBtnTable" onclick="switchView('table')">📅 课表</button>
+                    <button id="viewBtnList" onclick="switchView('list')">📋 列表</button>
+                </div>
+                <span class="filter-summary" id="taskSummary">共 0 个任务</span>
+            </div>
+
+            <!-- ========== 3️⃣ 批量操作栏 ========== -->
+            <div class="batch-bar" id="batchBar">
+                <span class="batch-count" id="batchCount">已选 0 项</span>
+                <button class="btn-xs btn-xs-success" onclick="batchComplete()">✅ 批量完成</button>
+                <button class="btn-xs btn-xs-danger" onclick="batchDelete()">🗑 批量删除</button>
+                <button class="btn-xs btn-xs-ghost" onclick="selectNone()">取消选择</button>
+            </div>
+
+            <!-- ========== 4️⃣ 任务列表 ========== -->
+            <div class="card">
+                <div class="card-body" style="padding:0;">
+                    <div id="taskListContainer">
+                        <div class="loading"><div class="spinner"></div></div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- 新建/编辑任务模态框 -->
+    <div class="modal-overlay" id="taskModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 id="taskModalTitle">新建任务</h3>
+                <button class="modal-close" onclick="closeModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="taskForm">
+                    <input type="hidden" id="taskEditId">
+                    <div class="form-group">
+                        <label class="form-label">任务标题 *</label>
+                        <input type="text" class="form-control" id="taskTitle" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">任务描述</label>
+                        <textarea class="form-control" id="taskDesc" rows="2"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">关联课程</label>
+                        <select class="form-control" id="taskCourse"><option value="">无</option></select>
+                    </div>
+                    <div style="display:flex;gap:10px;">
+                        <div class="form-group" style="flex:1;">
+                            <label class="form-label">类型</label>
+                            <select class="form-control" id="taskType">
+                                <option value="日常作业">日常作业</option>
+                                <option value="实验任务">实验任务</option>
+                                <option value="复习计划">复习计划</option>
+                                <option value="考试准备">考试准备</option>
+                                <option value="其他">其他</option>
+                            </select>
+                        </div>
+                        <div class="form-group" style="flex:1;">
+                            <label class="form-label">优先级</label>
+                            <select class="form-control" id="taskPriority">
+                                <option value="中">中</option>
+                                <option value="高">高</option>
+                                <option value="低">低</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">截止日期</label>
+                        <input type="date" class="form-control" id="taskDueDate">
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal()">取消</button>
+                <button class="btn btn-primary" onclick="saveTask()">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/api.js"></script>
+    <script src="js/utils.js"></script>
+    <script>
+        if (!checkAuth()) throw new Error('未登录');
+
+        let allTasks = [], courses = [];
+        let decomposeResult = null;
+        let selectedTasks = new Set();
+        let currentView = 'table';
+        let dragTaskId = null;
+        let weekOffset = 0;
+
+        // ========== 面板折叠 ==========
+        function toggleDecomposePanel() {
+            document.getElementById('decomposePanel').classList.toggle('collapsed');
+        }
+
+        // ========== 自然语言解析 ==========
+        function parseNLDuration(text) {
+            const patterns = [
+                { regex: /(\d+)\s*周/, convert: m => parseInt(m[1]) * 7 },
+                { regex: /(\d+)\s*天/, convert: m => parseInt(m[1]) },
+                { regex: /两\s*周/, convert: () => 14 },
+                { regex: /一\s*周/, convert: () => 7 },
+                { regex: /三\s*周/, convert: () => 21 },
+                { regex: /半\s*个?\s*月/, convert: () => 15 },
+                { regex: /一\s*个?\s*月/, convert: () => 30 },
+            ];
+            for (const p of patterns) {
+                const m = text.match(p.regex);
+                if (m) return p.convert(m);
+            }
+            return null;
+        }
+
+        // ========== 智能拆解 ==========
+        async function smartDecompose() {
+            const goalText = document.getElementById('sdGoalInput').value.trim();
+            if (!goalText) { showToast('请输入学习目标', 'warning'); return; }
+
+            const loading = document.getElementById('sdLoading');
+            const result = document.getElementById('sdResult');
+            const btn = document.getElementById('sdBtn');
+
+            loading.classList.add('active');
+            result.classList.remove('active');
+            btn.disabled = true;
+
+            try {
+                const totalDays = parseNLDuration(goalText) || 14;
+                const resp = await api.post('/agent/decompose-task', {
+                    title: goalText, description: '', total_days: totalDays
+                });
+
+                const subtasks = resp.data?.subtasks || resp.subtasks || [];
+                if (!subtasks.length) { showToast('未能拆解出任务，请尝试更明确的目标描述', 'warning'); return; }
+
+                decomposeResult = { goal: goalText, subtasks, totalDays };
+                renderDecomposeResult();
+            } catch (error) {
+                showToast('拆解失败：' + (error.message || '服务异常'), 'error');
+            } finally {
+                loading.classList.remove('active');
+                btn.disabled = false;
+            }
+        }
+
+        function renderDecomposeResult() {
+            if (!decomposeResult) return;
+            const { subtasks, goal, totalDays } = decomposeResult;
+
+            const phaseTasks = subtasks.filter(t => t.is_phase_header);
+            const dailyTasks = subtasks.filter(t => t.is_daily_task);
+
+            document.getElementById('sdResultTitle').textContent = `📋 ${goal}`;
+            document.getElementById('sdResultMeta').innerHTML = `
+                <span>📊 ${phaseTasks.length} 阶段</span>
+                <span>📅 ${dailyTasks.length} 天任务</span>
+                <span>⏱ 共 ${totalDays} 天</span>
+            `;
+
+            const hasMultiCourse = dailyTasks.some(t => t.course && t.time_slot);
+
+            if (hasMultiCourse) {
+                renderTimetableView(dailyTasks, phaseTasks);
+            } else {
+                renderSimpleListView(subtasks);
+            }
+
+            document.getElementById('sdResult').classList.add('active');
+        }
+
+        function renderTimetableView(dailyTasks, phaseTasks) {
+            const colorMap = {
+                '高等数学': { bg: '#e0e7ff', border: '#818cf8' },
+                '线性代数': { bg: '#fce7f3', border: '#f472b6' },
+                'Python': { bg: '#dcfce7', border: '#4ade80' },
+                '大学英语': { bg: '#fef3c7', border: '#fbbf24' },
+                '数据结构': { bg: '#e0f2fe', border: '#38bdf8' },
+                'C语言': { bg: '#f3e8ff', border: '#a78bfa' },
+                'Java': { bg: '#fee2e2', border: '#f87171' },
+                '综合': { bg: '#f3f4f6', border: '#9ca3af' },
+            };
+
+            const days = {};
+            dailyTasks.forEach(t => { const d = t.day || 1; if (!days[d]) days[d] = []; days[d].push(t); });
+
+            let html = '<div class="timetable">';
+            const sortedDays = Object.keys(days).map(Number).sort((a, b) => a - b);
+            for (const d of sortedDays) {
+                const slots = days[d];
+                const dateStr = slots[0]?.due_date ? formatDate(slots[0].due_date) : '';
+                html += `<div class="timetable-day">
+                    <div class="timetable-day-header">
+                        <span class="day-badge">Day ${d}</span> ${dateStr}
+                        <span style="font-size:11px;color:var(--gray-400);">${slots.length} 个时段</span>
+                    </div>`;
+
+                for (const s of slots) {
+                    const c = colorMap[s.course] || { bg: '#f3f4f6', border: '#9ca3af' };
+                    const time = (s.time_slot || '').replace(/上午\s*/, '').replace(/下午\s*/, '').replace(/晚上\s*/, '');
+                    const title = (s.title || '').replace(/^第\d+天\s*/, '');
+                    html += `<div class="timetable-slot">
+                        <div class="slot-time">${time || '—'}</div>
+                        <div class="slot-body">
+                            ${s.course ? `<span class="slot-course" style="background:${c.bg};color:${c.border};border:1px solid ${c.border}">${s.course}</span>` : ''}
+                            <div class="slot-title">${title}</div>
+                            ${s.description ? `<div class="slot-desc">${s.description.split('\n')[0]}</div>` : ''}
+                        </div>
+                        <div class="slot-hours" title="建议学习时长">${parseFloat(s.description?.match(/(\d+\.?\d*)\s*小时/)?.[1]) || '—'}</div>
+                    </div>`;
+                }
+                html += '</div>';
+            }
+            html += '</div>';
+            document.getElementById('sdTimetable').innerHTML = html;
+        }
+
+        function renderSimpleListView(subtasks) {
+            const phases = [];
+            let currentPhase = null;
+            let currentDays = [];
+
+            for (const task of subtasks) {
+                if (task.is_phase_header) {
+                    if (currentPhase && currentDays.length) phases.push({ phase: currentPhase, days: currentDays });
+                    currentPhase = task;
+                    currentDays = [];
+                } else {
+                    currentDays.push(task);
+                }
+            }
+            if (currentPhase && currentDays.length) phases.push({ phase: currentPhase, days: currentDays });
+
+            if (!phases.length) {
+                document.getElementById('sdTimetable').innerHTML = `
+                    <div class="simple-task-list">${subtasks.map((t, i) => `
+                        <div class="task-item"><span class="task-num">${i + 1}</span><span>${t.title}</span><span style="color:var(--gray-400);font-size:12px;">${formatDate(t.due_date)}</span></div>
+                    `).join('')}</div>`;
+                return;
+            }
+
+            let html = '<div class="timetable">';
+            for (const { phase, days } of phases) {
+                html += `<div class="timetable-day">
+                    <div class="timetable-day-header">
+                        ${phase.title} <span style="font-size:11px;color:var(--gray-400);">${phase.description || ''}</span>
+                    </div>
+                    <div class="simple-task-list">`;
+                for (const d of days) {
+                    html += `<div class="task-item">
+                        <span class="task-num">Day ${d.day || '—'}</span>
+                        <span style="flex:1;">${(d.title || '').replace(/^第\d+天：?/, '')}</span>
+                        <span style="color:var(--gray-400);font-size:12px;">${formatDate(d.due_date)}</span>
+                    </div>`;
+                }
+                html += '</div></div>';
+            }
+            html += '</div>';
+            document.getElementById('sdTimetable').innerHTML = html;
+        }
+
+        async function createAllDecomposedTasks() {
+            if (!decomposeResult || !decomposeResult.subtasks.length) {
+                showToast('没有可创建的任务', 'warning'); return;
+            }
+            const courseId = document.getElementById('sdCourseSelect').value || null;
+            const { goal, subtasks } = decomposeResult;
+
+            if (!await confirmDialog(`确定要创建 ${subtasks.length} 个任务吗？`)) return;
+
+            document.getElementById('sdBtn').disabled = true;
+            showToast('正在创建任务...', 'info');
+
+            try {
+                const parent = await api.createTask({
+                    title: goal.length > 50 ? goal.slice(0, 47) + '...' : goal,
+                    description: `智能拆解 · 共 ${subtasks.length} 个子任务 · 由 DeepSeek 生成`,
+                    course_id: courseId, task_type: '复习计划', priority: '高'
+                });
+                const parentTaskId = parent.data?.id || parent.id;
+                if (!parentTaskId) throw new Error('创建父任务失败');
+
+                let created = 0;
+                for (const st of subtasks) {
+                    try {
+                        await api.createTask({
+                            title: st.title, description: st.description || '',
+                            course_id: courseId, task_type: '复习计划',
+                            priority: st.is_phase_header ? '高' : '中',
+                            due_date: st.due_date || null,
+                            parent_task_id: parentTaskId
+                        });
+                        created++;
+                    } catch (e) { console.warn('创建子任务失败:', st.title, e); }
+                }
+                showToast(`成功创建 ${created}/${subtasks.length} 个任务`, 'success');
+                clearDecomposeResult();
+                loadTasks();
+            } catch (error) {
+                showToast('创建失败：' + (error.message || '未知错误'), 'error');
+            } finally { document.getElementById('sdBtn').disabled = false; }
+        }
+
+        function clearDecomposeResult() {
+            decomposeResult = null;
+            document.getElementById('sdResult').classList.remove('active');
+            document.getElementById('sdGoalInput').value = '';
+        }
+
+        // ========== 数据加载 ==========
+        async function loadCourses() {
+            try {
+                const result = await api.getCourses('all');
+                courses = result.data || [];
+                const opts = courses.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+                document.getElementById('courseFilter').innerHTML = '<option value="">全部课程</option>' + opts;
+                document.getElementById('taskCourse').innerHTML = '<option value="">无</option>' + opts;
+                document.getElementById('sdCourseSelect').innerHTML = '<option value="">自动匹配课程</option>' + opts;
+            } catch (e) { console.error(e); }
+        }
+
+        async function loadTasks() {
+            const status = document.getElementById('statusFilter').value || undefined;
+            const courseId = document.getElementById('courseFilter').value || undefined;
+            try {
+                const result = await api.getTasks(status, courseId);
+                allTasks = result.data || [];
+                document.getElementById('taskSummary').textContent = `共 ${allTasks.length} 个任务`;
+                renderTaskList();
+            } catch (e) { showToast('加载任务失败', 'error'); }
+        }
+
+        // ========== 任务列表渲染 ==========
+        function switchView(view) {
+            currentView = view;
+            document.getElementById('viewBtnTable').classList.toggle('active', view === 'table');
+            document.getElementById('viewBtnList').classList.toggle('active', view === 'list');
+            renderTaskList();
+        }
+
+        function renderTaskList() {
+            if (currentView === 'table') {
+                renderTimetableGrid();
+            } else {
+                renderListView();
+            }
+        }
+
+        function localDateStr(date) {
+            return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+        }
+
+        function parseTaskTimeInfo(task) {
+            const info = { day: null, course: '', time_slot: '', priority: task.priority, type: task.task_type, status: task.status };
+            const title = task.title || '';
+
+            const dayMatch = title.match(/第\s*(\d+)\s*天/);
+            if (dayMatch) info.day = parseInt(dayMatch[1]);
+
+            const courseMatch = title.match(/【(.+?)】/);
+            if (courseMatch) info.course = courseMatch[1];
+
+            const slotMatch = title.match(/(\d{1,2}:\d{2}[-~—]\d{1,2}:\d{2})/);
+            if (slotMatch) {
+                info.time_slot = slotMatch[1];
+            } else {
+                const amPmMatch = title.match(/(上午|下午|晚上)\s*(\d{1,2}:\d{2}[-~—]\d{1,2}:\d{2})/);
+                if (amPmMatch) info.time_slot = amPmMatch[2];
+            }
+
+            if (!info.day && task.due_date) {
+                const now = new Date();
+                const due = new Date(task.due_date);
+                const diff = Math.ceil((due - now) / (1000 * 60 * 60 * 24));
+                if (diff >= 0 && diff <= 90) info.day = diff + 1;
+            }
+
+            if (task.course_name && !info.course) info.course = task.course_name;
+
+            return info;
+        }
+
+        function cleanChipTitle(title, course) {
+            let s = title;
+            s = s.replace(/^第\d+天\s*/, '');
+            s = s.replace(/\d{1,2}:\d{2}[-~—]\d{1,2}:\d{2}\s*\|\s*/, '');
+            s = s.replace(/\d{1,2}:\d{2}[-~—]\d{1,2}:\d{2}/, '');
+            if (course) {
+                const esc = course.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                s = s.replace(new RegExp('【' + esc + '】'), '');
+            }
+            s = s.replace(/^[:\s|，,.。.\-—–\[\]【】]+/, '');
+            s = s.replace(/\s+/g, ' ').trim();
+            return s.slice(0, 28) || title.slice(0, 28);
+        }
+
+        function getCourseColor(course) {
+            const map = {
+                '高等数学': { bg: '#e0e7ff', border: '#818cf8', text: '#3730a3' },
+                '线性代数': { bg: '#fce7f3', border: '#f472b6', text: '#9d174d' },
+                'Python': { bg: '#dcfce7', border: '#4ade80', text: '#166534' },
+                '大学英语': { bg: '#fef3c7', border: '#fbbf24', text: '#92400e' },
+                '数据结构': { bg: '#e0f2fe', border: '#38bdf8', text: '#075985' },
+                'C语言': { bg: '#f3e8ff', border: '#a78bfa', text: '#5b21b6' },
+                'Java': { bg: '#fee2e2', border: '#f87171', text: '#991b1b' },
+                '综合': { bg: '#f3f4f6', border: '#9ca3af', text: '#4b5563' },
+            };
+            return map[course] || { bg: '#f9fafb', border: '#d1d5db', text: '#6b7280' };
+        }
+
+        function getWeekStartMonday(date) {
+            const d = new Date(date);
+            const day = d.getDay();
+            const diff = day === 0 ? -6 : 1 - day;
+            d.setDate(d.getDate() + diff);
+            d.setHours(0, 0, 0, 0);
+            return d;
+        }
+
+        function getDaysOfWeek(monday) {
+            const days = [];
+            for (let i = 0; i < 7; i++) {
+                const d = new Date(monday);
+                d.setDate(d.getDate() + i);
+                days.push(d);
+            }
+            return days;
+        }
+
+        function shiftWeek(delta) {
+            weekOffset += delta;
+            renderTaskList();
+        }
+
+        function goToToday() {
+            weekOffset = 0;
+            renderTaskList();
+        }
+
+        function renderTimetableGrid() {
+            const container = document.getElementById('taskListContainer');
+            if (!allTasks.length) {
+                container.innerHTML = '<div class="empty-state"><div class="icon">📅</div><h3>暂无任务</h3><p>点击「新建任务」或使用上方的智能拆解来创建</p></div>';
+                document.getElementById('batchBar').classList.remove('active');
+                return;
+            }
+
+            const weekdays = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const todayStr = localDateStr(today);
+
+            const thisMonday = getWeekStartMonday(today);
+            const weekMonday = new Date(thisMonday);
+            weekMonday.setDate(weekMonday.getDate() + weekOffset * 7);
+
+            const weekDates = getDaysOfWeek(weekMonday);
+            const weekEnd = new Date(weekDates[6]);
+            weekEnd.setHours(23, 59, 59);
+
+            // 格式化标签
+            const m = weekDates[0];
+            const e = weekDates[6];
+            const fmt = d => `${d.getFullYear()}/${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getDate().toString().padStart(2, '0')}`;
+            const weekLabel = `${fmt(m)} — ${fmt(e)}`;
+
+            const isCurrentWeek = weekDates.some(d => localDateStr(d) === todayStr);
+            const isPastWeek = weekDates[6] < today;
+            const isFutureWeek = weekDates[0] > today;
+
+            // 固定整点时段 7:00 ~ 23:00
+            const hourlySlots = [];
+            for (let h = 7; h < 23; h++) {
+                const key = `${String(h).padStart(2, '0')}:00-${String(h + 1).padStart(2, '0')}:00`;
+                hourlySlots.push(key);
+            }
+
+            // 初始化 cells
+            const cells = {};
+            for (const d of weekDates) {
+                const key = localDateStr(d);
+                cells[key] = { date: d, slots: {} };
+                for (const sk of hourlySlots) {
+                    cells[key].slots[sk] = [];
+                }
+            }
+
+            // 分配任务到格子
+            for (const task of allTasks) {
+                const info = parseTaskTimeInfo(task);
+                const taskData = { ...task, ...info };
+
+                // 用 due_date 精确定位，不在当前周内就跳过
+                let dateKey = null;
+                if (task.due_date) {
+                    const due = task.due_date.toString().slice(0, 10);
+                    if (cells[due]) dateKey = due;
+                }
+                if (!dateKey) continue;
+
+                // 确定时段
+                let nearestSlot = hourlySlots[0];
+                if (info.time_slot) {
+                    const slotStart = info.time_slot.match(/(\d{1,2}):/);
+                    if (slotStart) {
+                        const startH = parseInt(slotStart[1]);
+                        const match = hourlySlots.find(sk => sk.startsWith(String(startH).padStart(2, '0') + ':'));
+                        if (match) nearestSlot = match;
+                    }
+                }
+
+                cells[dateKey].slots[nearestSlot].push(taskData);
+            }
+
+            const showKeys = weekDates.map(d => localDateStr(d));
+            const hasAnyTasks = showKeys.some(k => hourlySlots.some(sk => (cells[k] && cells[k].slots[sk]) ? cells[k].slots[sk].length > 0 : false));
+            const totalSlots = showKeys.reduce((sum, k) => sum + hourlySlots.reduce((s, sk) => s + (cells[k] && cells[k].slots[sk] ? cells[k].slots[sk].length : 0), 0), 0);
+
+            const gridCols = `120px repeat(7, 1fr)`;
+            const gridRows = `auto repeat(${hourlySlots.length}, minmax(72px, auto))`;
+
+            let html = '';
+            html += `<div class="week-pager">
+                <button class="pager-btn" onclick="shiftWeek(-1)">◀ 上一周</button>
+                <button class="pager-btn today-btn" onclick="goToToday()" ${isCurrentWeek ? 'disabled' : ''}>今 天</button>
+                <span class="week-label">${weekLabel}</span>
+                <button class="pager-btn" onclick="shiftWeek(1)">下一周 ▶</button>
+                <span style="margin-left:auto;font-size:11px;color:var(--gray-400);">已选 <b style="color:var(--primary);">${selectedTasks.size}</b> 个</span>
+            </div>`;
+
+            if (!hasAnyTasks && isFutureWeek && totalSlots === 0) {
+                html += `<div class="week-hint">📭 本周暂无任务 · 共 ${allTasks.length} 个任务分布在整个计划中</div>`;
+            }
+            html += `<div class="tg-grid active" style="grid-template-columns:${gridCols};grid-template-rows:${gridRows};">`;
+
+            html += '<div class="tg-corner">时间</div>';
+            for (let i = 0; i < 7; i++) {
+                const key = showKeys[i];
+                const d = cells[key].date;
+                const isToday = key === localDateStr(today);
+                html += `<div class="tg-day-header${isToday ? ' today' : ''}">
+                    <div class="day-name">${weekdays[i]}</div>
+                    <div class="day-date">${(d.getMonth()+1).toString().padStart(2,'0')}/${d.getDate().toString().padStart(2,'0')}</div>
+                </div>`;
+            }
+
+            for (const sk of hourlySlots) {
+                html += `<div class="tg-time-label">${sk}</div>`;
+                for (const key of showKeys) {
+                    const slotTasks = (cells[key] && cells[key].slots[sk]) || [];
+                    if (!slotTasks.length) {
+                        html += `<div class="tg-empty-cell" data-date="${key}" data-slot="${sk}" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event, '${key}', '${sk}')"></div>`;
+                    } else {
+                        html += `<div class="tg-cell" data-date="${key}" data-slot="${sk}" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event, '${key}', '${sk}')">`;
+                        for (const t of slotTasks) {
+                            const c = getCourseColor(t.course);
+                            const completed = t.status === '已完成';
+                            const selected = selectedTasks.has(t.id);
+                            html += `<div class="tg-chip${completed ? ' completed' : ''}${selected ? ' selected' : ''}"
+                                style="background:${c.bg};border-color:${c.border};color:${c.text};"
+                                draggable="true"
+                                ondragstart="handleDragStart(event, ${t.id})"
+                                ondragend="handleDragEnd(event, ${t.id})"
+                                onclick="event.stopPropagation();toggleSelectGrid(${t.id})"
+                                title="${(t.description || '').slice(0, 80)}">
+                                <div class="tg-chip-check">${selected ? '✓' : ''}</div>
+                                <div class="tg-chip-title">${cleanChipTitle(t.title, t.course || '')}</div>
+                                ${t.description ? `<div class="tg-chip-desc">${t.description.slice(0, 30)}</div>` : ''}
+                            </div>`;
+                        }
+                        html += '</div>';
+                    }
+                }
+            }
+            html += '</div>';
+            container.innerHTML = html;
+            updateBatchBar();
+        }
+
+        // ========== 拖拽逻辑 ==========
+        function handleDragStart(e, taskId) {
+            dragTaskId = taskId;
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', taskId);
+            setTimeout(() => {
+                const chip = document.querySelector(`.tg-chip[data-task-id="${taskId}"]`) || e.target.closest('.tg-chip');
+                if (chip) chip.classList.add('dragging');
+            }, 0);
+        }
+
+        function handleDragEnd(e, taskId) {
+            document.querySelectorAll('.tg-chip.dragging').forEach(el => el.classList.remove('dragging'));
+            document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
+            dragTaskId = null;
+        }
+
+        function handleDragOver(e) {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            e.currentTarget.classList.add('drag-over');
+        }
+
+        function handleDragLeave(e) {
+            e.currentTarget.classList.remove('drag-over');
+        }
+
+        async function handleDrop(e, dateKey, slotKey) {
+            e.preventDefault();
+            e.currentTarget.classList.remove('drag-over');
+
+            const taskId = dragTaskId || parseInt(e.dataTransfer.getData('text/plain'));
+            if (!taskId) return;
+
+            const task = allTasks.find(t => t.id === taskId);
+            if (!task) return;
+
+            const oldTitle = task.title || '';
+
+            let core = oldTitle
+                .replace(/^第\d+天\s*/, '')
+                .replace(/\d{1,2}:\d{2}[-~—]\d{1,2}:\d{2}\s*\|\s*/, '')
+                .replace(/\d{1,2}:\d{2}[-~—]\d{1,2}:\d{2}/, '')
+                .trim();
+
+            const courseMatch = core.match(/【(.+?)】\s*/);
+            let courseTag = '';
+            if (courseMatch) {
+                courseTag = courseMatch[0];
+                core = core.replace(courseTag, '');
+            }
+
+            core = core.trim();
+
+            const dropDate = new Date(dateKey + 'T00:00:00');
+            const monday = getWeekStartMonday(dropDate);
+            const dayNum = Math.round((dropDate - monday) / (1000 * 60 * 60 * 24)) + 1;
+
+            const newTitle = `第${dayNum}天 ${slotKey} | ${courseTag}${core}`;
+
+            try {
+                await api.updateTask(taskId, { title: newTitle, due_date: dateKey });
+                showToast(`已移至 ${dateKey} ${slotKey}`, 'success');
+                loadTasks();
+            } catch (e) {
+                showToast('移动失败: ' + (e.message || '未知错误'), 'error');
+            }
+
+            dragTaskId = null;
+        }
+
+
+        function toggleSelectGrid(taskId) {
+            if (selectedTasks.has(taskId)) {
+                selectedTasks.delete(taskId);
+            } else {
+                selectedTasks.add(taskId);
+            }
+            updateBatchBar();
+            renderTimetableGrid();
+        }
+
+        function renderListView() {
+            const container = document.getElementById('taskListContainer');
+            if (!allTasks.length) {
+                container.innerHTML = '<div class="empty-state"><div class="icon">✅</div><h3>暂无任务</h3><p>点击「新建任务」或使用上方的智能拆解来创建</p></div>';
+                updateBatchBar();
+                return;
+            }
+
+            const allSelected = allTasks.every(t => selectedTasks.has(t.id));
+            let html = `<div class="select-row" onclick="toggleSelectAll()">
+                <input type="checkbox" ${allSelected ? 'checked' : ''} id="selectAllCb">
+                <span>${allSelected ? '取消全选' : '全选'}</span>
+            </div><ul class="task-list">`;
+
+            for (const task of allTasks) {
+                const checked = selectedTasks.has(task.id) ? 'checked' : '';
+                const completed = task.status === '已完成';
+                const pClass = task.priority === '高' ? 'badge-high' : task.priority === '低' ? 'badge-low' : 'badge-mid';
+                const nextStatus = task.status === '待办' ? '进行中' : task.status === '进行中' ? '已完成' : '待办';
+                const nextLabel = task.status === '待办' ? '开始' : task.status === '进行中' ? '完成' : '重开';
+
+                html += `
+                <li class="task-row ${completed ? 'completed' : ''}">
+                    <div class="task-check" onclick="event.stopPropagation();">
+                        <input type="checkbox" ${checked} onchange="toggleSelect(${task.id}, this.checked)">
+                    </div>
+                    <div class="task-dot" onclick="toggleTask(${task.id})" title="${completed ? '重开' : '完成'}">${completed ? '✓' : ''}</div>
+                    <div class="task-row-body">
+                        <div class="task-row-title">${task.title}</div>
+                        <div class="task-row-meta">
+                            <span class="badge ${pClass}">${task.priority}</span>
+                            <span>${task.task_type}</span>
+                            ${task.course_name ? `<span>📖 ${task.course_name}</span>` : ''}
+                            ${task.due_date ? `<span>📅 ${formatDate(task.due_date)}</span>` : ''}
+                            ${task.description ? `<span style="opacity:.6;">${task.description.slice(0, 25)}</span>` : ''}
+                        </div>
+                    </div>
+                    <div class="task-row-actions">
+                        <button class="btn-icon btn-icon-success" onclick="updateTaskStatus(${task.id}, '${nextStatus}')">${nextLabel}</button>
+                        <button class="btn-icon" onclick="editTask(${task.id})">编辑</button>
+                        <button class="btn-icon" onclick="decomposeTask(${task.id})">分解</button>
+                        <button class="btn-icon btn-icon-danger" onclick="deleteSingleTask(${task.id})">删除</button>
+                    </div>
+                </li>`;
+            }
+            html += '</ul>';
+            container.innerHTML = html;
+            updateBatchBar();
+        }
+
+        // ========== 选择逻辑 ==========
+        function updateBatchBar() {
+            const bar = document.getElementById('batchBar');
+            const count = selectedTasks.size;
+            bar.classList.toggle('active', count > 0);
+            document.getElementById('batchCount').textContent = `已选 ${count} 项`;
+        }
+
+        function toggleSelect(taskId, checked) {
+            checked ? selectedTasks.add(taskId) : selectedTasks.delete(taskId);
+            updateBatchBar();
+            renderTaskList();
+        }
+
+        function toggleSelectAll() {
+            const allSelected = allTasks.every(t => selectedTasks.has(t.id));
+            allSelected ? selectedTasks.clear() : allTasks.forEach(t => selectedTasks.add(t.id));
+            updateBatchBar();
+            renderTaskList();
+        }
+
+        function selectNone() {
+            selectedTasks.clear();
+            updateBatchBar();
+            renderTaskList();
+        }
+
+        async function batchDelete() {
+            const count = selectedTasks.size;
+            if (!count) { showToast('请先选择任务', 'warning'); return; }
+            if (!await confirmDialog(`确定删除 ${count} 个任务？不可撤销。`)) return;
+
+            let ok = 0; const ids = [...selectedTasks];
+            for (const id of ids) { try { await api.deleteTask(id); ok++; } catch (e) { console.warn('删除失败:', id); } }
+            selectedTasks.clear();
+            updateBatchBar();
+            showToast(`删除 ${ok}/${count} 个任务`, 'success');
+            loadTasks();
+        }
+
+        async function batchComplete() {
+            const count = selectedTasks.size;
+            if (!count) { showToast('请先选择任务', 'warning'); return; }
+            if (!await confirmDialog(`将 ${count} 个任务标记为已完成？`)) return;
+
+            let ok = 0; const ids = [...selectedTasks];
+            for (const id of ids) { try { await api.completeTask(id); ok++; } catch (e) { console.warn('完成失败:', id); } }
+            selectedTasks.clear();
+            updateBatchBar();
+            showToast(`完成 ${ok}/${count} 个任务`, 'success');
+            loadTasks();
+        }
+
+        // ========== 单任务操作 ==========
+        async function deleteSingleTask(id) {
+            if (!await confirmDialog('确定删除该任务？')) return;
+            try { await api.deleteTask(id); showToast('已删除', 'success'); loadTasks(); }
+            catch (e) { showToast('删除失败', 'error'); }
+        }
+
+        async function toggleTask(id) {
+            try { await api.completeTask(id); showToast('已完成', 'success'); loadTasks(); }
+            catch (e) { showToast('操作失败', 'error'); }
+        }
+
+        async function updateTaskStatus(id, status) {
+            try { await api.updateTask(id, { status }); showToast('状态已更新', 'success'); loadTasks(); }
+            catch (e) { showToast('操作失败', 'error'); }
+        }
+
+        async function decomposeTask(id) {
+            try { await api.decomposeTask(id); showToast('已分解为子任务', 'success'); loadTasks(); }
+            catch (e) { showToast(e.message || '分解失败', 'error'); }
+        }
+
+        // ========== 创建/编辑任务 ==========
+        function showCreateModal() {
+            document.getElementById('taskEditId').value = '';
+            document.getElementById('taskModalTitle').textContent = '新建任务';
+            document.getElementById('taskForm').reset();
+            document.getElementById('taskModal').classList.add('active');
+        }
+
+        function editTask(id) {
+            const task = allTasks.find(t => t.id === id);
+            if (!task) return;
+            document.getElementById('taskEditId').value = task.id;
+            document.getElementById('taskModalTitle').textContent = '编辑任务';
+            document.getElementById('taskTitle').value = task.title || '';
+            document.getElementById('taskDesc').value = task.description || '';
+            document.getElementById('taskCourse').value = task.course_id || '';
+            document.getElementById('taskType').value = task.task_type || '其他';
+            document.getElementById('taskPriority').value = task.priority || '中';
+            document.getElementById('taskDueDate').value = task.due_date ? task.due_date.slice(0, 10) : '';
+            document.getElementById('taskModal').classList.add('active');
+        }
+
+        function closeModal() {
+            document.getElementById('taskModal').classList.remove('active');
+        }
+
+        async function saveTask() {
+            const title = document.getElementById('taskTitle').value.trim();
+            if (!title) { showToast('请填写任务标题', 'warning'); return; }
+
+            const data = {
+                title,
+                description: document.getElementById('taskDesc').value.trim(),
+                course_id: document.getElementById('taskCourse').value || null,
+                task_type: document.getElementById('taskType').value,
+                priority: document.getElementById('taskPriority').value,
+                due_date: document.getElementById('taskDueDate').value || null
+            };
+
+            try {
+                const editId = document.getElementById('taskEditId').value;
+                if (editId) {
+                    await api.updateTask(parseInt(editId), data);
+                    showToast('更新成功', 'success');
+                } else {
+                    await api.createTask(data);
+                    showToast('创建成功', 'success');
+                }
+                closeModal();
+                loadTasks();
+            } catch (e) { showToast(e.message || '保存失败', 'error'); }
+        }
+
+        // ========== 初始化 ==========
+        loadCourses().then(() => loadTasks());
+
+        // 回车触发放送（在 textarea 中 Shift+Enter 换行，Enter 拆解）
+        document.getElementById('sdGoalInput').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); smartDecompose(); }
+        });
+    </script>
+</body>
+</html>

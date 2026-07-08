@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agent对话 - 课程学习助手</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="page-wrapper">
+        <!-- 侧边栏 -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <h2>📚 学习助手</h2>
+            </div>
+            <nav class="sidebar-nav">
+                <a href="/dashboard.html" class="nav-item">
+                    <span class="icon">🏠</span> 仪表盘
+                </a>
+                <a href="/courses.html" class="nav-item">
+                    <span class="icon">📖</span> 课程管理
+                </a>
+                <a href="/chat.html" class="nav-item active">
+                    <span class="icon">💬</span> Agent对话
+                </a>
+                <a href="/tasks.html" class="nav-item">
+                    <span class="icon">✅</span> 任务管理
+                </a>
+                <a href="/plan.html" class="nav-item">
+                    <span class="icon">📅</span> 学习计划
+                </a>
+                <a href="/profile.html" class="nav-item">
+                    <span class="icon">👤</span> 个人中心
+                </a>
+            </nav>
+            <div class="sidebar-footer">
+                <button class="btn btn-outline btn-block" onclick="logout()">退出登录</button>
+            </div>
+        </aside>
+
+        <!-- 主内容 -->
+        <main class="main-content">
+            <div class="topbar">
+                <h1>Agent 对话</h1>
+                <div class="topbar-actions">
+                    <select class="form-control" style="width:180px;" id="courseSelect" onchange="switchCourse()">
+                        <option value="">通用对话</option>
+                    </select>
+                    <button class="btn btn-primary" onclick="newChat()">+ 新建对话</button>
+                </div>
+            </div>
+
+            <div class="chat-container">
+                <!-- 对话列表 -->
+                <div class="chat-sidebar">
+                    <div class="chat-sidebar-header">
+                        <strong>历史对话</strong>
+                    </div>
+                    <div class="chat-list" id="chatList">
+                        <div class="empty-state" style="padding:30px;">
+                            <p>暂无对话</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 聊天区域 -->
+                <div class="chat-main">
+                    <div class="chat-messages" id="chatMessages">
+                        <div class="empty-state">
+                            <div class="icon">💬</div>
+                            <h3>开始你的学习之旅</h3>
+                            <p>选择课程并创建新对话，AI助手将为你提供专属答疑</p>
+                        </div>
+                    </div>
+                    <div class="chat-input-area">
+                        <textarea class="chat-input" id="chatInput" placeholder="输入你的问题..." rows="1"
+                            onkeydown="handleInputKey(event)"></textarea>
+                        <button class="btn btn-primary" id="sendBtn" onclick="sendMessage()">发送</button>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="js/api.js"></script>
+    <script src="js/utils.js"></script>
+    <script>
+        if (!checkAuth()) throw new Error('未登录');
+
+        let currentCourseId = getUrlParam('course_id') || '';
+        let currentConvId = null;
+        let conversations = [];
+        let courses = [];
+
+        // 加载课程列表
+        async function loadCourses() {
+            try {
+                const result = await api.getCourses();
+                courses = result.data || [];
+                const select = document.getElementById('courseSelect');
+                select.innerHTML = '<option value="">通用对话</option>' +
+                    courses.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+
+                if (currentCourseId) {
+                    select.value = currentCourseId;
+                }
+            } catch (error) {
+                console.error(error);
+            }
+        }
+
+        // 加载对话列表
+        async function loadConversations() {
+            try {
+                const result = await api.getConversations(currentCourseId || undefined);
+                conversations = result.data || [];
+                renderChatList();
+
+                // 如果有对话且没有当前对话，选中第一个
+                if (conversations.length && !currentConvId) {
+                    selectConversation(conversations[0].id);
+                }
+            } catch (error) {
+                showToast('加载对话列表失败', 'error');
+            }
+        }
+
+        function renderChatList() {
+            const container = document.getElementById('chatList');
+            if (!conversations.length) {
+                container.innerHTML = '<div class="empty-state" style="padding:30px;"><p>暂无对话</p></div>';
+                return;
+            }
+
+            container.innerHTML = conversations.map(conv => `
+                <div class="chat-item ${conv.id === currentConvId ? 'active' : ''}"
+                     onclick="selectConversation(${conv.id})">
+                    <div class="chat-item-title">${conv.title || '新对话'}</div>
+                    <div class="chat-item-time">${formatDateTime(conv.updated_at)}</div>
+                </div>
+            `).join('');
+        }
+
+        function switchCourse() {
+            currentCourseId = document.getElementById('courseSelect').value;
+            currentConvId = null;
+            loadConversations();
+            document.getElementById('chatMessages').innerHTML = `
+                <div class="empty-state">
+                    <div class="icon">💬</div>
+                    <h3>开始你的学习之旅</h3>
+                    <p>选择课程并创建新对话，AI助手将为你提供专属答疑</p>
+                </div>
+            `;
+        }
+
+        async function newChat() {
+            try {
+                const result = await api.createConversation(currentCourseId || null, '新对话');
+                currentConvId = result.data.id;
+                await loadConversations();
+
+                document.getElementById('chatMessages').innerHTML = `
+                    <div class="empty-state">
+                        <div class="icon">🤖</div>
+                        <h3>新对话已创建</h3>
+                        <p>在下方输入框开始提问吧！</p>
+                    </div>
+                `;
+                document.getElementById('chatInput').focus();
+            } catch (error) {
+                showToast('创建对话失败', 'error');
+            }
+        }
+
+        async function selectConversation(convId) {
+            currentConvId = convId;
+            renderChatList();
+            await loadMessages();
+        }
+
+        async function loadMessages() {
+            if (!currentConvId) return;
+
+            try {
+                const result = await api.getMessages(currentConvId);
+                const messages = result.data || [];
+                renderMessages(messages);
+            } catch (error) {
+                showToast('加载消息失败', 'error');
+            }
+        }
+
+        function renderMessages(messages) {
+            const container = document.getElementById('chatMessages');
+
+            if (!messages.length) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <div class="icon">🤖</div>
+                        <h3>开始对话</h3>
+                        <p>在下方输入框输入你的问题</p>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = messages.map(msg => `
+                <div class="message ${msg.role}">
+                    <div class="message-avatar">
+                        ${msg.role === 'user' ? '我' : 'AI'}
+                    </div>
+                    <div class="message-content">
+                        <div class="message-bubble">${renderMarkdown(msg.content)}</div>
+                        ${msg.references && msg.references.length ? `
+                            <div class="message-references">
+                                📚 参考: ${msg.references.map(r => r.doc_name).join(', ')}
+                            </div>
+                        ` : ''}
+                        <div class="message-time">${formatDateTime(msg.created_at)}</div>
+                    </div>
+                </div>
+            `).join('');
+
+            // 滚动到底部
+            container.scrollTop = container.scrollHeight;
+        }
+
+        async function sendMessage() {
+            const input = document.getElementById('chatInput');
+            const content = input.value.trim();
+
+            if (!content) return;
+
+            if (!currentConvId) {
+                // 自动创建对话
+                try {
+                    const result = await api.createConversation(currentCourseId || null, content.slice(0, 20));
+                    currentConvId = result.data.id;
+                    await loadConversations();
+                } catch (error) {
+                    showToast('创建对话失败', 'error');
+                    return;
+                }
+            }
+
+            input.value = '';
+            const sendBtn = document.getElementById('sendBtn');
+            sendBtn.disabled = true;
+
+            // 显示用户消息
+            const container = document.getElementById('chatMessages');
+            // 清除空状态
+            const empty = container.querySelector('.empty-state');
+            if (empty) empty.remove();
+
+            container.innerHTML += `
+                <div class="message user">
+                    <div class="message-avatar">我</div>
+                    <div class="message-content">
+                        <div class="message-bubble">${renderMarkdown(content)}</div>
+                        <div class="message-time">刚刚</div>
+                    </div>
+                </div>
+            `;
+
+            // 显示加载状态
+            const loadingId = 'loading-' + Date.now();
+            container.innerHTML += `
+                <div class="message assistant" id="${loadingId}">
+                    <div class="message-avatar">AI</div>
+                    <div class="message-content">
+                        <div class="message-bubble">
+                            <div class="spinner" style="width:20px;height:20px;border-width:2px;"></div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            container.scrollTop = container.scrollHeight;
+
+            try {
+                const result = await api.sendMessage(currentConvId, content);
+                const reply = result.data;
+
+                // 移除加载状态
+                document.getElementById(loadingId)?.remove();
+
+                // 显示AI回复
+                container.innerHTML += `
+                    <div class="message assistant">
+                        <div class="message-avatar">AI</div>
+                        <div class="message-content">
+                            <div class="message-bubble">${renderMarkdown(reply.content)}</div>
+                            ${reply.references && reply.references.length ? `
+                                <div class="message-references">
+                                    📚 参考: ${reply.references.map(r => r.doc_name).join(', ')}
+                                </div>
+                            ` : ''}
+                            <div class="message-time">刚刚</div>
+                        </div>
+                    </div>
+                `;
+                container.scrollTop = container.scrollHeight;
+
+                // 更新对话列表标题
+                loadConversations();
+            } catch (error) {
+                document.getElementById(loadingId)?.remove();
+                showToast('发送失败', 'error');
+            } finally {
+                sendBtn.disabled = false;
+            }
+        }
+
+        function handleInputKey(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        }
+
+        // 初始化
+        loadCourses().then(() => loadConversations());
+    </script>
+</body>
+</html>

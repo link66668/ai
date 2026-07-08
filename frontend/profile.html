@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>个人中心 - 课程学习助手</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="page-wrapper">
+        <!-- 侧边栏 -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <h2>📚 学习助手</h2>
+            </div>
+            <nav class="sidebar-nav">
+                <a href="/dashboard.html" class="nav-item">
+                    <span class="icon">🏠</span> 仪表盘
+                </a>
+                <a href="/courses.html" class="nav-item">
+                    <span class="icon">📖</span> 课程管理
+                </a>
+                <a href="/chat.html" class="nav-item">
+                    <span class="icon">💬</span> Agent对话
+                </a>
+                <a href="/tasks.html" class="nav-item">
+                    <span class="icon">✅</span> 任务管理
+                </a>
+                <a href="/plan.html" class="nav-item">
+                    <span class="icon">📅</span> 学习计划
+                </a>
+                <a href="/profile.html" class="nav-item active">
+                    <span class="icon">👤</span> 个人中心
+                </a>
+            </nav>
+            <div class="sidebar-footer">
+                <button class="btn btn-outline btn-block" onclick="logout()">退出登录</button>
+            </div>
+        </aside>
+
+        <!-- 主内容 -->
+        <main class="main-content">
+            <div class="topbar">
+                <h1>个人中心</h1>
+            </div>
+
+            <!-- 账号信息 -->
+            <div class="card mb-3">
+                <div class="card-header">
+                    <h3>账号信息</h3>
+                </div>
+                <div class="card-body">
+                    <form id="profileForm">
+                        <div class="form-group">
+                            <label class="form-label">用户名</label>
+                            <input type="text" class="form-control" id="profileUsername" required>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">邮箱</label>
+                            <input type="email" class="form-control" id="profileEmail">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">注册时间</label>
+                            <input type="text" class="form-control" id="profileCreatedAt" disabled>
+                        </div>
+                        <button type="submit" class="btn btn-primary">保存修改</button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- 修改密码 -->
+            <div class="card mb-3">
+                <div class="card-header">
+                    <h3>修改密码</h3>
+                </div>
+                <div class="card-body">
+                    <form id="passwordForm">
+                        <div class="form-group">
+                            <label class="form-label">新密码</label>
+                            <input type="password" class="form-control" id="newPassword" placeholder="至少6位" required>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">确认新密码</label>
+                            <input type="password" class="form-control" id="confirmPassword" required>
+                        </div>
+                        <button type="submit" class="btn btn-primary">修改密码</button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- 数据统计 -->
+            <div class="card mb-3">
+                <div class="card-header">
+                    <h3>我的数据</h3>
+                </div>
+                <div class="card-body">
+                    <div class="stat-grid">
+                        <div class="stat-card">
+                            <h4>课程数量</h4>
+                            <div class="stat-value" id="statCourses">0</div>
+                        </div>
+                        <div class="stat-card">
+                            <h4>资料数量</h4>
+                            <div class="stat-value" id="statDocs">0</div>
+                        </div>
+                        <div class="stat-card">
+                            <h4>对话数量</h4>
+                            <div class="stat-value" id="statChats">0</div>
+                        </div>
+                        <div class="stat-card">
+                            <h4>任务数量</h4>
+                            <div class="stat-value" id="statTasks">0</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 数据管理 -->
+            <div class="card">
+                <div class="card-header">
+                    <h3>数据管理</h3>
+                </div>
+                <div class="card-body">
+                    <div style="display:flex; gap:12px; flex-wrap:wrap;">
+                        <button class="btn btn-outline" onclick="exportData()">📥 导出数据</button>
+                        <button class="btn btn-danger" onclick="clearData()">🗑️ 清除缓存</button>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="js/api.js"></script>
+    <script src="js/utils.js"></script>
+    <script>
+        if (!checkAuth()) throw new Error('未登录');
+
+        // 加载用户信息
+        async function loadProfile() {
+            try {
+                const result = await api.getCurrentUser();
+                const user = result.data;
+
+                document.getElementById('profileUsername').value = user.username;
+                document.getElementById('profileEmail').value = user.email || '';
+                document.getElementById('profileCreatedAt').value = formatDateTime(user.created_at);
+
+                // 更新本地存储
+                api.setUser(user);
+            } catch (error) {
+                showToast('加载用户信息失败', 'error');
+            }
+        }
+
+        // 加载统计数据
+        async function loadStats() {
+            try {
+                const [coursesRes, tasksRes, chatsRes] = await Promise.all([
+                    api.getCourses('all'),
+                    api.getTasks(),
+                    api.getConversations()
+                ]);
+
+                const courses = coursesRes.data || [];
+                document.getElementById('statCourses').textContent = courses.length;
+                document.getElementById('statTasks').textContent = (tasksRes.data || []).length;
+                document.getElementById('statChats').textContent = (chatsRes.data || []).length;
+
+                // 统计资料数
+                let docCount = 0;
+                for (const course of courses) {
+                    docCount += course.doc_count || 0;
+                }
+                document.getElementById('statDocs').textContent = docCount;
+            } catch (error) {
+                console.error(error);
+            }
+        }
+
+        // 更新个人信息
+        document.getElementById('profileForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const username = document.getElementById('profileUsername').value.trim();
+            const email = document.getElementById('profileEmail').value.trim();
+
+            if (!username) {
+                showToast('用户名不能为空', 'warning');
+                return;
+            }
+
+            try {
+                await api.updateUser({ username, email });
+                showToast('更新成功', 'success');
+
+                // 更新本地存储
+                const user = getCurrentUser();
+                user.username = username;
+                user.email = email;
+                api.setUser(user);
+            } catch (error) {
+                showToast(error.message || '更新失败', 'error');
+            }
+        });
+
+        // 修改密码
+        document.getElementById('passwordForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const newPassword = document.getElementById('newPassword').value;
+            const confirmPassword = document.getElementById('confirmPassword').value;
+
+            if (newPassword.length < 6) {
+                showToast('密码至少6位', 'warning');
+                return;
+            }
+
+            if (newPassword !== confirmPassword) {
+                showToast('两次密码不一致', 'warning');
+                return;
+            }
+
+            try {
+                await api.updateUser({ password: newPassword });
+                showToast('密码修改成功', 'success');
+                document.getElementById('passwordForm').reset();
+            } catch (error) {
+                showToast(error.message || '修改失败', 'error');
+            }
+        });
+
+        // 导出数据
+        async function exportData() {
+            try {
+                const [coursesRes, tasksRes, chatsRes, plansRes] = await Promise.all([
+                    api.getCourses('all'),
+                    api.getTasks(),
+                    api.getConversations(),
+                    api.getPlans()
+                ]);
+
+                const data = {
+                    courses: coursesRes.data,
+                    tasks: tasksRes.data,
+                    conversations: chatsRes.data,
+                    plans: plansRes.data,
+                    exportTime: new Date().toISOString()
+                };
+
+                const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `学习数据备份_${new Date().toLocaleDateString()}.json`;
+                a.click();
+                URL.revokeObjectURL(url);
+
+                showToast('导出成功', 'success');
+            } catch (error) {
+                showToast('导出失败', 'error');
+            }
+        }
+
+        // 清除缓存
+        function clearData() {
+            if (confirm('确定要清除本地缓存吗？这将退出登录。')) {
+                localStorage.clear();
+                window.location.href = '/';
+            }
+        }
+
+        // 初始化
+        loadProfile();
+        loadStats();
+    </script>
+</body>
+</html>

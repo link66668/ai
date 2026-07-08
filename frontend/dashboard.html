@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>仪表盘 - 课程学习助手</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="page-wrapper">
+        <!-- 侧边栏 -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <h2>📚 学习助手</h2>
+            </div>
+            <nav class="sidebar-nav">
+                <a href="/dashboard.html" class="nav-item active">
+                    <span class="icon">🏠</span> 仪表盘
+                </a>
+                <a href="/courses.html" class="nav-item">
+                    <span class="icon">📖</span> 课程管理
+                </a>
+                <a href="/chat.html" class="nav-item">
+                    <span class="icon">💬</span> Agent对话
+                </a>
+                <a href="/tasks.html" class="nav-item">
+                    <span class="icon">✅</span> 任务管理
+                </a>
+                <a href="/plan.html" class="nav-item">
+                    <span class="icon">📅</span> 学习计划
+                </a>
+                <a href="/profile.html" class="nav-item">
+                    <span class="icon">👤</span> 个人中心
+                </a>
+            </nav>
+            <div class="sidebar-footer">
+                <button class="btn btn-outline btn-block" onclick="logout()">退出登录</button>
+            </div>
+        </aside>
+
+        <!-- 主内容 -->
+        <main class="main-content">
+            <div class="topbar">
+                <h1>仪表盘</h1>
+                <div class="topbar-actions">
+                    <span class="user-info" id="userInfo">加载中...</span>
+                </div>
+            </div>
+
+            <!-- 统计卡片 -->
+            <div class="stat-grid">
+                <div class="stat-card">
+                    <div class="stat-icon blue">📖</div>
+                    <h4>活跃课程</h4>
+                    <div class="stat-value" id="courseCount">0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon green">✅</div>
+                    <h4>待办任务</h4>
+                    <div class="stat-value" id="taskCount">0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon orange">💬</div>
+                    <h4>对话记录</h4>
+                    <div class="stat-value" id="chatCount">0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon purple">📅</div>
+                    <h4>学习计划</h4>
+                    <div class="stat-value" id="planCount">0</div>
+                </div>
+            </div>
+
+            <!-- 快捷入口 -->
+            <div class="card mb-3">
+                <div class="card-header">
+                    <h3>快捷操作</h3>
+                </div>
+                <div class="card-body">
+                    <div style="display:flex; gap:12px; flex-wrap:wrap;">
+                        <a href="/courses.html" class="btn btn-primary">📖 新建课程</a>
+                        <a href="/chat.html" class="btn btn-success">💬 开始对话</a>
+                        <a href="/tasks.html" class="btn btn-outline">✅ 查看任务</a>
+                        <a href="/plan.html" class="btn btn-outline">📅 制定计划</a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 最近任务 -->
+            <div class="card mb-3">
+                <div class="card-header">
+                    <h3>近期任务</h3>
+                    <a href="/tasks.html" class="btn btn-sm btn-outline">查看全部</a>
+                </div>
+                <div class="card-body" id="recentTasks">
+                    <div class="loading"><div class="spinner"></div></div>
+                </div>
+            </div>
+
+            <!-- 我的课程 -->
+            <div class="card">
+                <div class="card-header">
+                    <h3>我的课程</h3>
+                    <a href="/courses.html" class="btn btn-sm btn-outline">查看全部</a>
+                </div>
+                <div class="card-body" id="recentCourses">
+                    <div class="loading"><div class="spinner"></div></div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="js/api.js"></script>
+    <script src="js/utils.js"></script>
+    <script>
+        if (!checkAuth()) throw new Error('未登录');
+
+        // 显示用户信息
+        const user = getCurrentUser();
+        if (user) {
+            document.getElementById('userInfo').textContent = `你好，${user.username}`;
+        }
+
+        // 加载仪表盘数据
+        async function loadDashboard() {
+            // 每个API独立加载，一个失败不影响其他
+            async function safeCall(fn, onSuccess) {
+                try {
+                    const res = await fn();
+                    onSuccess(res.data || []);
+                } catch (e) {
+                    console.warn('API调用失败:', e.message);
+                    onSuccess([]);
+                }
+            }
+
+            let courses = [], tasks = [], chats = [], plans = [];
+
+            await Promise.all([
+                safeCall(() => api.getCourses(), data => { courses = data; }),
+                safeCall(() => api.getTasks(), data => { tasks = data; }),
+                safeCall(() => api.getConversations(), data => { chats = data; }),
+                safeCall(() => api.getPlans(), data => { plans = data; }),
+            ]);
+
+            // 更新统计
+            document.getElementById('courseCount').textContent = courses.length;
+            document.getElementById('taskCount').textContent = tasks.filter(t => t.status !== '已完成').length;
+            document.getElementById('chatCount').textContent = chats.length;
+            document.getElementById('planCount').textContent = plans.length;
+
+            // 渲染近期任务
+            const recentTasks = tasks.filter(t => t.status !== '已完成').slice(0, 5);
+            renderRecentTasks(recentTasks);
+
+            // 渲染课程
+            renderRecentCourses(courses.slice(0, 4));
+        }
+
+        function renderRecentTasks(tasks) {
+            const container = document.getElementById('recentTasks');
+            if (!tasks.length) {
+                container.innerHTML = '<div class="empty-state"><p>暂无待办任务</p></div>';
+                return;
+            }
+
+            container.innerHTML = '<ul class="task-list">' + tasks.map(task => `
+                <li class="task-item ${task.status === '已完成' ? 'completed' : ''}">
+                    <div class="task-checkbox" onclick="toggleTask(${task.id}, this)"></div>
+                    <div class="task-info">
+                        <div class="task-title">${task.title}</div>
+                        <div class="task-meta">
+                            ${task.course_name ? `<span>${task.course_name}</span> · ` : ''}
+                            <span class="task-priority ${getPriorityClass(task.priority)}">${task.priority}</span>
+                            ${task.due_date ? ` · 截止: ${formatDate(task.due_date)}` : ''}
+                        </div>
+                    </div>
+                </li>
+            `).join('') + '</ul>';
+        }
+
+        function renderRecentCourses(courses) {
+            const container = document.getElementById('recentCourses');
+            if (!courses.length) {
+                container.innerHTML = '<div class="empty-state"><p>暂无课程，<a href="/courses.html">立即创建</a></p></div>';
+                return;
+            }
+
+            container.innerHTML = '<div class="course-grid">' + courses.map(course => `
+                <div class="course-card" onclick="window.location.href='/course_detail.html?id=${course.id}'">
+                    <div class="course-card-header">
+                        <h3>${course.name}</h3>
+                        <span class="badge badge-${course.status === 'active' ? 'active' : 'archived'}">
+                            ${course.status === 'active' ? '进行中' : '已归档'}
+                        </span>
+                    </div>
+                    <div class="course-card-info">
+                        <span>👨‍🏫 ${course.teacher || '未设置'}</span>
+                        <span>📚 ${course.credit || 0}学分</span>
+                    </div>
+                    <div class="course-card-desc">${course.description || '暂无简介'}</div>
+                    <div class="course-card-footer">
+                        <span class="text-muted">📎 ${course.doc_count || 0} 份资料</span>
+                    </div>
+                </div>
+            `).join('') + '</div>';
+        }
+
+        async function toggleTask(taskId, el) {
+            try {
+                await api.completeTask(taskId);
+                showToast('任务已完成', 'success');
+                loadDashboard();
+            } catch (error) {
+                showToast('操作失败', 'error');
+            }
+        }
+
+        loadDashboard();
+    </script>
+</body>
+</html>

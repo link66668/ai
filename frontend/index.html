@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>课程学习助手Agent平台 - 登录</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="login-page">
+        <div class="login-card">
+            <h1>📚 课程学习助手</h1>
+            <p class="subtitle">智能学习平台 Agent</p>
+
+            <div class="login-tabs">
+                <div class="login-tab active" data-tab="login">登录</div>
+                <div class="login-tab" data-tab="register">注册</div>
+            </div>
+
+            <!-- 登录表单 -->
+            <form id="loginForm" class="login-form">
+                <div class="form-group">
+                    <label class="form-label">用户名</label>
+                    <input type="text" class="form-control" id="loginUsername" placeholder="请输入用户名" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">密码</label>
+                    <input type="password" class="form-control" id="loginPassword" placeholder="请输入密码" required>
+                </div>
+                <button type="submit" class="btn btn-primary btn-block btn-lg">登 录</button>
+            </form>
+
+            <!-- 注册表单 -->
+            <form id="registerForm" class="login-form hidden">
+                <div class="form-group">
+                    <label class="form-label">用户名</label>
+                    <input type="text" class="form-control" id="regUsername" placeholder="3-20个字符" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">邮箱</label>
+                    <input type="email" class="form-control" id="regEmail" placeholder="请输入邮箱（选填）">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">密码</label>
+                    <input type="password" class="form-control" id="regPassword" placeholder="至少6位" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">确认密码</label>
+                    <input type="password" class="form-control" id="regPassword2" placeholder="再次输入密码" required>
+                </div>
+                <button type="submit" class="btn btn-primary btn-block btn-lg">注 册</button>
+            </form>
+
+            <p class="text-center text-muted mt-2" style="font-size:12px;">
+                测试账号：demo / 123456
+            </p>
+        </div>
+    </div>
+
+    <script src="js/api.js"></script>
+    <script src="js/utils.js"></script>
+    <script>
+        // 如果已登录，跳转到仪表盘
+        if (localStorage.getItem('token')) {
+            window.location.href = '/dashboard.html';
+        }
+
+        // 切换登录/注册
+        document.querySelectorAll('.login-tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.login-tab').forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+
+                const tabName = tab.dataset.tab;
+                document.getElementById('loginForm').classList.toggle('hidden', tabName !== 'login');
+                document.getElementById('registerForm').classList.toggle('hidden', tabName !== 'register');
+            });
+        });
+
+        // 登录
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const username = document.getElementById('loginUsername').value.trim();
+            const password = document.getElementById('loginPassword').value;
+
+            if (!username || !password) {
+                showToast('请填写完整信息', 'warning');
+                return;
+            }
+
+            try {
+                const result = await api.login(username, password);
+                if (result.code === 200) {
+                    showToast('登录成功', 'success');
+                    setTimeout(() => {
+                        window.location.href = '/dashboard.html';
+                    }, 500);
+                } else {
+                    showToast(result.msg || '登录失败', 'error');
+                }
+            } catch (error) {
+                showToast(error.message || '登录失败', 'error');
+            }
+        });
+
+        // 注册
+        document.getElementById('registerForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const username = document.getElementById('regUsername').value.trim();
+            const email = document.getElementById('regEmail').value.trim();
+            const password = document.getElementById('regPassword').value;
+            const password2 = document.getElementById('regPassword2').value;
+
+            if (!username || !password) {
+                showToast('请填写完整信息', 'warning');
+                return;
+            }
+
+            if (password !== password2) {
+                showToast('两次密码输入不一致', 'warning');
+                return;
+            }
+
+            try {
+                const result = await api.register(username, password, email);
+                if (result.code === 200) {
+                    showToast('注册成功，请登录', 'success');
+                    document.querySelector('.login-tab[data-tab="login"]').click();
+                    document.getElementById('loginUsername').value = username;
+                } else {
+                    showToast(result.msg || '注册失败', 'error');
+                }
+            } catch (error) {
+                showToast(error.message || '注册失败', 'error');
+            }
+        });
+    </script>
+</body>
+</html>
