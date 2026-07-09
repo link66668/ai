@@ -85,11 +85,19 @@ def test_ai_config(current_user):
     # 获取有效配置（用户配置优先）
     config = UserAIConfig.get_effective_config(current_user['id'])
 
+    def _build_url(base_url: str, path: str) -> str:
+        """拼接 URL，避免 /v1 重复"""
+        url = base_url.rstrip('/')
+        # 如果 base_url 已以 /v1 结尾，去掉后再拼 path
+        if url.endswith('/v1'):
+            url = url[:-3]
+        return f"{url}{path}"
+
     try:
         if test_type == 'chat':
             # 测试对话模型
             resp = requests.post(
-                f"{config['ai_api_url']}/v1/chat/completions",
+                _build_url(config['ai_api_url'], '/v1/chat/completions'),
                 headers={
                     "Authorization": f"Bearer {config['ai_api_key']}",
                     "Content-Type": "application/json"
@@ -109,7 +117,7 @@ def test_ai_config(current_user):
         elif test_type == 'vision':
             # 测试视觉模型
             resp = requests.post(
-                f"{config['vision_api_url']}/v1/chat/completions",
+                _build_url(config['vision_api_url'], '/v1/chat/completions'),
                 headers={
                     "Authorization": f"Bearer {config['vision_api_key']}",
                     "Content-Type": "application/json"
@@ -129,7 +137,7 @@ def test_ai_config(current_user):
         elif test_type == 'embedding':
             # 测试嵌入模型
             resp = requests.post(
-                f"{config['embedding_api_url']}/v1/embeddings",
+                _build_url(config['embedding_api_url'], '/v1/embeddings'),
                 headers={
                     "Authorization": f"Bearer {config['embedding_api_key']}",
                     "Content-Type": "application/json"

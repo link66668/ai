@@ -744,8 +744,13 @@ class AIService:
                     'ai_model': Config.AI_MODEL,
                 }
 
+            # 拼接 URL，避免 /v1 重复
+            api_url = config['ai_api_url'].rstrip('/')
+            if api_url.endswith('/v1'):
+                api_url = api_url[:-3]
+
             resp = requests.post(
-                f"{config['ai_api_url']}/v1/chat/completions",
+                f"{api_url}/v1/chat/completions",
                 headers={
                     "Authorization": f"Bearer {config['ai_api_key']}",
                     "Content-Type": "application/json"
