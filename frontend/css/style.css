@@ -590,6 +590,7 @@ table tbody tr:hover {
     display: flex;
     margin-bottom: 16px;
     gap: 12px;
+    contain: layout style;
 }
 
 .message.user {

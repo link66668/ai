@@ -111,6 +111,10 @@
         let tempFileSessionId = null;
         let tempFiles = [];  // [{file_id, filename, file_type, file_size, preview}]
 
+        // 流式渲染优化
+        let streamRafId = null;
+        let pendingStreamText = null;
+
         // 加载课程列表
         async function loadCourses() {
             try {
@@ -212,51 +216,41 @@
 
         function renderMessages(messages) {
             const container = document.getElementById('chatMessages');
-
             if (!messages.length) {
                 container.innerHTML = `
                     <div class="empty-state">
                         <div class="icon">🤖</div>
                         <h3>开始对话</h3>
                         <p>在下方输入框输入你的问题</p>
-                    </div>
-                `;
+                    </div>`;
                 return;
             }
-
-            container.innerHTML = messages.map(msg => `
+            const html = messages.map(msg => `
                 <div class="message ${msg.role}">
-                    <div class="message-avatar">
-                        ${msg.role === 'user' ? '我' : 'AI'}
-                    </div>
+                    <div class="message-avatar">${msg.role === 'user' ? '我' : 'AI'}</div>
                     <div class="message-content">
                         <div class="message-bubble">${renderMarkdown(msg.content)}</div>
                         ${msg.references && msg.references.length ? `
                             <div class="message-references">
                                 📚 参考: ${msg.references.map(r => r.doc_name).join(', ')}
-                            </div>
-                        ` : ''}
+                            </div>` : ''}
                         <div class="message-time">${formatDateTime(msg.created_at)}</div>
                     </div>
-                </div>
-            `).join('');
-
-            // 滚动到底部
+                </div>`).join('');
+            container.innerHTML = html;
             container.scrollTop = container.scrollHeight;
         }
 
         async function sendMessage() {
             const input = document.getElementById('chatInput');
             const content = input.value.trim();
-
             if (!content) return;
 
             if (!currentConvId) {
-                // 自动创建对话
                 try {
                     const result = await api.createConversation(currentCourseId || null, content.slice(0, 20));
                     currentConvId = result.data.id;
-                    await loadConversations();
+                    loadConversations(); // 不await，并行执行
                 } catch (error) {
                     showToast('创建对话失败', 'error');
                     return;
@@ -269,12 +263,13 @@
             sendBtn.classList.add('hidden');
             stopBtn.classList.remove('hidden');
 
-            // 显示用户消息
             const container = document.getElementById('chatMessages');
             const empty = container.querySelector('.empty-state');
             if (empty) empty.remove();
 
-            container.innerHTML += `
+            // 用 insertAdjacentHTML 追加，避免 innerHTML += 重解析整个容器
+            const msgId = 'msg-' + Date.now();
+            container.insertAdjacentHTML('beforeend', `
                 <div class="message user">
                     <div class="message-avatar">我</div>
                     <div class="message-content">
@@ -282,11 +277,6 @@
                         <div class="message-time">刚刚</div>
                     </div>
                 </div>
-            `;
-
-            // 创建AI消息气泡（流式更新）
-            const msgId = 'msg-' + Date.now();
-            container.innerHTML += `
                 <div class="message assistant" id="${msgId}">
                     <div class="message-avatar">AI</div>
                     <div class="message-content">
@@ -294,60 +284,50 @@
                         <div class="message-references hidden" id="${msgId}-refs"></div>
                         <div class="message-time">刚刚</div>
                     </div>
-                </div>
-            `;
-            container.scrollTop = container.scrollHeight;
+                </div>`);
 
             const bubble = document.querySelector(`#${msgId} .message-bubble`);
             const refsEl = document.getElementById(`${msgId}-refs`);
+            container.scrollTop = container.scrollHeight;
 
-            // 流式调用
             currentStreamController = api.streamMessage(
-                currentConvId,
-                content,
-                tempFileSessionId,
-                // onChunk
-                (delta, fullText) => {
-                    bubble.innerHTML = renderMarkdown(fullText) + '<span class="streaming-cursor"></span>';
-                    container.scrollTop = container.scrollHeight;
-                },
+                currentConvId, content, tempFileSessionId,
+                // onChunk — 仅记录文本，由 rAF 统一渲染
+                (delta, fullText) => { scheduleStreamUpdate(bubble, fullText, container); },
                 // onDone
                 (fullText, citations, interrupted) => {
-                    // 移除光标
-                    bubble.innerHTML = renderMarkdown(fullText);
-                    bubble.querySelector('.streaming-cursor')?.remove();
+                    // 取消任何挂起的 rAF，直接做最终渲染
+                    if (streamRafId) { cancelAnimationFrame(streamRafId); streamRafId = null; }
+                    const finalText = fullText || pendingStreamText || '';
+                    pendingStreamText = null;
+                    lastStableHtml = '';
+                    lastStableBoundary = -1;
 
-                    // 显示引用
+                    bubble.innerHTML = renderMarkdown(finalText);
+
                     if (citations && citations.length) {
                         const courseRefs = citations.filter(c => c.source !== 'temp_file');
                         const tempRefs = citations.filter(c => c.source === 'temp_file');
                         let refHtml = '';
-                        if (courseRefs.length) {
-                            refHtml += '📚 课程资料: ' + courseRefs.map(r => `[${r.num}]`).join(' ') + ' ';
-                        }
-                        if (tempRefs.length) {
-                            refHtml += '<span class="temp-file-badge">临时文件</span>';
-                        }
+                        if (courseRefs.length) refHtml += '📚 课程资料: ' + courseRefs.map(r => `[${r.num}]`).join(' ') + ' ';
+                        if (tempRefs.length) refHtml += '<span class="temp-file-badge">临时文件</span>';
                         refsEl.innerHTML = refHtml;
                         refsEl.classList.remove('hidden');
                     }
+                    if (interrupted) showToast('生成已停止', 'warning');
 
-                    if (interrupted) {
-                        showToast('生成已停止', 'warning');
-                    }
-
-                    // 恢复按钮状态
                     sendBtn.classList.remove('hidden');
                     stopBtn.classList.add('hidden');
                     currentStreamController = null;
-
-                    // 更新对话列表
-                    loadConversations();
+                    loadConversations(); // 后台刷新，不阻塞
                 },
                 // onError
                 (error) => {
-                    bubble.innerHTML = renderMarkdown('*[AI 服务暂时不可用: ' + error.message + ']*');
-                    bubble.querySelector('.streaming-cursor')?.remove();
+                    if (streamRafId) { cancelAnimationFrame(streamRafId); streamRafId = null; }
+                    pendingStreamText = null;
+                    lastStableHtml = '';
+                    lastStableBoundary = -1;
+                    bubble.innerHTML = '<em style="color:var(--gray-500)">AI 服务暂时不可用: ' + error.message + '</em>';
                     sendBtn.classList.remove('hidden');
                     stopBtn.classList.add('hidden');
                     currentStreamController = null;
@@ -524,6 +504,46 @@
             tempFileSessionId = null;
             renderTempFileBar();
             showToast('临时文件已清除', 'info');
+        }
+
+        // ========== 流式渲染优化 ==========
+        // rAF 批处理：每帧最多更新一次 DOM，合并多个 token 的累积文本
+        // 稳定内容缓存：按段落分割，已完成段落的 HTML 不重复计算
+        let lastStableHtml = '';
+        let lastStableBoundary = -1;
+
+        function scheduleStreamUpdate(bubble, fullText, container) {
+            pendingStreamText = fullText;
+            if (!streamRafId) {
+                streamRafId = requestAnimationFrame(() => {
+                    streamRafId = null;
+                    if (pendingStreamText !== null) {
+                        performStreamUpdate(bubble, pendingStreamText, container);
+                        pendingStreamText = null;
+                    }
+                });
+            }
+        }
+
+        function performStreamUpdate(bubble, text, container) {
+            // 在最后一个段落边界处分割（双换行）
+            // 稳定部分（已完成段落）的 HTML 缓存复用，仅重渲染活动尾部
+            const boundary = text.lastIndexOf('\n\n');
+            let newHtml;
+            if (boundary > 0 && boundary !== lastStableBoundary) {
+                const stableRaw = text.slice(0, boundary);
+                const tailRaw = text.slice(boundary);
+                lastStableHtml = renderMarkdown(stableRaw);
+                lastStableBoundary = boundary;
+                newHtml = lastStableHtml + renderMarkdown(tailRaw);
+            } else if (boundary > 0 && boundary === lastStableBoundary) {
+                const tailRaw = text.slice(boundary);
+                newHtml = lastStableHtml + renderMarkdown(tailRaw);
+            } else {
+                newHtml = renderMarkdown(text);
+            }
+            bubble.innerHTML = newHtml + '<span class="streaming-cursor"></span>';
+            container.scrollTop = container.scrollHeight;
         }
 
         function handleInputKey(e) {
