@@ -150,18 +150,31 @@ class RetrievalService:
             search_results = self.hybrid_search(course_id, query, top_k=top_k, ai_config=ai_config)
 
             if search_results:
-                context_parts.append('【课程资料】')
+                # 预加载文档名称映射（document_id → original_name）
+                doc_names = self._load_doc_names(course_id)
+
+                context_parts.append('【课程知识库】')
                 for i, result in enumerate(search_results):
                     citation_num = i + 1
                     content = result['content']
-                    context_parts.append(f'[{citation_num}] {content}')
+                    doc_id = result.get('document_id') or result.get('metadata', {}).get('document_id', '')
+                    doc_name = doc_names.get(int(doc_id), '未知文档') if doc_id else '未知文档'
+                    heading = result.get('heading_path', '') or result.get('metadata', {}).get('heading_path', '')
+
+                    # 上下文中包含文件名，方便 LLM 引用
+                    source_label = f'来源: {doc_name}'
+                    if heading:
+                        source_label += f' > {heading}'
+                    context_parts.append(f'[{citation_num}] ({source_label})\n{content}')
+
                     citations.append({
                         'num': citation_num,
                         'content': content[:200],
-                        'chunk_id': result.get('chunk_id', ''),
-                        'document_id': result.get('metadata', {}).get('document_id', ''),
-                        'heading_path': result.get('metadata', {}).get('heading_path', ''),
+                        'document_id': str(doc_id),
+                        'doc_name': doc_name,
+                        'heading_path': heading,
                         'score': round(result['score'], 4),
+                        'source': 'course_kb',
                     })
                     total_tokens += self.count_tokens(content)
 
@@ -192,7 +205,7 @@ class RetrievalService:
             context_text = '\n\n'.join(context_parts)
             messages.append({
                 'role': 'system',
-                'content': f'以下是可以用来回答问题的参考资料：\n\n{context_text}\n\n请根据以上资料回答用户问题。引用课程资料时请标注编号如[1]，引用临时文件时标注(临时文件)。'
+                'content': f'以下是从课程知识库中检索到的参考资料，每条标注了来源文件名：\n\n{context_text}\n\n请根据以上资料回答用户问题。引用时务必标注编号和来源文件名，如 [1]《xxx.md》。引用临时文件时标注(临时文件)。'
             })
 
         # 5. 添加对话历史（在 token 限制内）
@@ -220,7 +233,7 @@ class RetrievalService:
         prompt += '2. 回答应准确、简洁、有组织\n'
 
         if has_course_kb:
-            prompt += '3. 引用课程资料时使用编号标注，如[1]、[2]\n'
+            prompt += '3. 引用课程知识库内容时，必须标注编号和来源文件名，格式如 [1]《文件名》。例如："根据《第1章-绪论.md》中的内容[1]..."\n'
         if has_temp_file:
             prompt += '4. 临时文件中的图片内容已经过视觉识别提取为文字，你可以直接阅读和分析这些文字内容。引用临时文件内容时标注(临时文件)\n'
 
@@ -228,6 +241,15 @@ class RetrievalService:
         prompt += '6. 可以结合你的知识进行补充，但要明确区分资料来源和你的推断\n'
 
         return prompt
+
+    def _load_doc_names(self, course_id):
+        """加载课程的文档 ID → 文件名映射"""
+        from database import db
+        docs = db.fetch_all(
+            "SELECT id, original_name FROM documents WHERE course_id = ?",
+            (course_id,)
+        )
+        return {d['id']: d['original_name'] for d in docs} if docs else {}
 
     def _truncate_history(self, history, max_tokens):
         """

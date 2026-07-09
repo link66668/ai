@@ -19,7 +19,7 @@ class Config:
     # 文件上传配置
     UPLOAD_FOLDER = os.path.join(os.path.dirname(__file__), 'uploads')
     MAX_CONTENT_LENGTH = 200 * 1024 * 1024  # 200MB
-    ALLOWED_EXTENSIONS = {'txt', 'pdf', 'png', 'jpg', 'jpeg', 'gif', 'doc', 'docx', 'ppt', 'pptx', 'xls', 'xlsx'}
+    ALLOWED_EXTENSIONS = {'txt', 'pdf', 'png', 'jpg', 'jpeg', 'gif', 'doc', 'docx', 'ppt', 'pptx', 'xls', 'xlsx', 'md'}
 
     # AI服务配置（DeepSeek 对话模型）
     AI_API_URL = os.environ.get('AI_API_URL', 'https://api.deepseek.com')

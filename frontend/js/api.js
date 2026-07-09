@@ -162,6 +162,15 @@ class ApiClient {
         return this.post(`/courses/${id}/archive`);
     }
 
+    // 知识库
+    getKnowledgeBase(courseId) {
+        return this.get(`/courses/${courseId}/knowledge-base`);
+    }
+
+    getDocumentMarkdown(docId) {
+        return this.get(`/documents/${docId}/markdown`);
+    }
+
     importCoursesCSV(formData) {
         return this.request('/courses/import-csv', {
             method: 'POST',

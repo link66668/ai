@@ -1075,18 +1075,18 @@ class AIService:
     def chat_rag(self, message, course_id=None, conversation_history=None,
                  temp_file_session_id=None, stream=False, ai_config=None):
         """
-        对话引擎 — 支持多模态图片（图片以 image_url 格式传给视觉模型）
+        对话引擎 — 支持课程知识库检索 + 多模态图片
 
         Args:
             message: 用户消息
-            course_id: 课程 ID（保留接口，当前未使用）
+            course_id: 课程 ID（有值时自动检索知识库）
             conversation_history: 对话历史
             temp_file_session_id: 临时文件会话 ID
             stream: 是否流式输出（返回生成器）
             ai_config: 用户AI配置 dict（可选）
 
         Returns:
-            非流式: {'response': str, 'references': list}
+            非流式: {'response': str, 'references': list, 'citations': list}
             流式: Generator yielding SSE strings
         """
         from services.temp_file_service import temp_file_manager
@@ -1109,24 +1109,35 @@ class AIService:
             except Exception as e:
                 print(f"[Chat] 获取图片数据失败: {e}")
 
-        # 3. 构建 messages（对话历史 + 临时文件 + 用户消息 + 图片）
-        messages = []
+        # 3. 构建 messages — 有课程时走 RAG 检索，否则手动构建
+        citations = []
 
-        # 系统提示
-        messages.append({
-            'role': 'system',
-            'content': '你是课程学习助手，用中文回答。回答简洁准确，不要过度展开。如果用户发送了图片，请仔细分析图片内容并回答问题。'
-        })
+        if course_id:
+            # RAG 检索：从课程知识库中搜索相关内容
+            try:
+                from services.retrieval_service import RetrievalService
+                retrieval = RetrievalService()
+                rag_result = retrieval.build_rag_context(
+                    course_id=course_id,
+                    query=message,
+                    temp_file_text=temp_text,
+                    conversation_history=conversation_history,
+                    ai_config=ai_config,
+                )
+                messages = rag_result['messages']
+                citations = rag_result.get('citations', [])
 
-        # 对话历史
-        if conversation_history:
-            messages.extend(conversation_history)
+                # 如果有图片，将图片附加到最后一条 user 消息
+                if image_data_list:
+                    messages = self._attach_images_to_messages(messages, image_data_list)
 
-        # 构建用户消息（含图片时使用多模态格式）
-        user_message = self._build_multimodal_user_message(
-            message, temp_text, image_data_list
-        )
-        messages.append(user_message)
+                print(f"[Chat] RAG 检索完成: {len(citations)} 条引用, {rag_result.get('token_count', 0)} tokens")
+            except Exception as e:
+                print(f"[Chat] RAG 检索失败，降级到无检索模式: {e}")
+                messages = self._build_fallback_messages(message, temp_text, image_data_list, conversation_history)
+        else:
+            # 无课程上下文，手动构建
+            messages = self._build_fallback_messages(message, temp_text, image_data_list, conversation_history)
 
         # 4. 调用对话模型
         if stream:
@@ -1139,6 +1150,21 @@ class AIService:
                         conversation_id=None,
                         ai_config=ai_config,
                     ):
+                        # 在 done 事件中注入 citations
+                        if event.startswith('data: '):
+                            try:
+                                event_data = json.loads(event[6:])
+                                if event_data.get('done') and citations:
+                                    event_data['citations'] = [
+                                        {'num': c.get('num'), 'heading_path': c.get('heading_path', ''),
+                                         'document_id': c.get('document_id', ''),
+                                         'doc_name': c.get('doc_name', ''),
+                                         'source': c.get('source', 'course_kb')}
+                                        for c in citations
+                                    ]
+                                    event = 'data: ' + json.dumps(event_data, ensure_ascii=False)
+                            except (json.JSONDecodeError, KeyError):
+                                pass
                         yield event
                 except Exception as e:
                     print(f"[Chat] 流式调用失败: {e}")
@@ -1177,7 +1203,7 @@ class AIService:
                 response_text = streaming_service.blocking_chat(
                     messages, ai_config=ai_config,
                 )
-                return {'response': response_text, 'references': []}
+                return {'response': response_text, 'references': [], 'citations': citations}
             except Exception as e:
                 # 多模态失败时回退到纯文本
                 if image_data_list:
@@ -1187,7 +1213,7 @@ class AIService:
                         response_text = streaming_service.blocking_chat(
                             text_messages, ai_config=ai_config,
                         )
-                        return {'response': response_text, 'references': []}
+                        return {'response': response_text, 'references': [], 'citations': citations}
                     except Exception as e2:
                         print(f"[Chat] 纯文本回退也失败: {e2}")
 
@@ -1243,6 +1269,45 @@ class AIService:
         })
 
         return {'role': 'user', 'content': content_parts}
+
+    def _build_fallback_messages(self, message, temp_text, image_data_list, conversation_history):
+        """无 RAG 检索时手动构建消息列表"""
+        messages = [{
+            'role': 'system',
+            'content': '你是课程学习助手，用中文回答。回答简洁准确，不要过度展开。如果用户发送了图片，请仔细分析图片内容并回答问题。'
+        }]
+        if conversation_history:
+            messages.extend(conversation_history)
+        user_message = self._build_multimodal_user_message(message, temp_text, image_data_list)
+        messages.append(user_message)
+        return messages
+
+    def _attach_images_to_messages(self, messages, image_data_list):
+        """将图片附加到消息列表中最后一条 user 消息"""
+        if not image_data_list:
+            return messages
+
+        for i in range(len(messages) - 1, -1, -1):
+            if messages[i].get('role') == 'user':
+                original_content = messages[i].get('content', '')
+                if isinstance(original_content, str):
+                    content_parts = []
+                    for img in image_data_list:
+                        try:
+                            b64 = base64.b64encode(img['image_bytes']).decode('utf-8')
+                            content_parts.append({
+                                'type': 'image_url',
+                                'image_url': {
+                                    'url': f'data:{img["mime_type"]};base64,{b64}',
+                                    'detail': 'high',
+                                }
+                            })
+                        except Exception:
+                            pass
+                    content_parts.append({'type': 'text', 'text': original_content})
+                    messages[i] = {'role': 'user', 'content': content_parts}
+                break
+        return messages
 
     @staticmethod
     def _strip_images_from_messages(messages):

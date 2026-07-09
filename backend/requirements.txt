@@ -41,6 +41,9 @@ rank-bm25>=0.2.2           # BM25检索
 # 安全
 cryptography>=42.0.0       # 临时文件加密
 
+# MinerU 文档转换（可选，仅 Cloud SDK 模式需要；REST API 模式仅需 requests）
+# mineru-open-sdk>=0.1.0
+
 # 注意：
 # 1. tiktoken 需要 Rust 编译器，在 Python 3.13 上可能安装失败
 #    系统已内置字符级 token 计数降级方案，不影响运行

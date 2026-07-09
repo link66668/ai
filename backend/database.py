@@ -66,6 +66,7 @@ class Database:
                     page_count INTEGER DEFAULT 0,
                     chunk_count INTEGER DEFAULT 0,
                     metadata_json TEXT,
+                    md_path VARCHAR(500) DEFAULT '',
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE,
                     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE

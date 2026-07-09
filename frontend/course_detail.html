@@ -83,6 +83,7 @@
                 <div class="card-body">
                     <div class="tabs">
                         <div class="tab-item active" data-tab="docs">课程资料</div>
+                        <div class="tab-item" data-tab="kb">📚 知识库</div>
                         <div class="tab-item" data-tab="tasks">相关任务</div>
                     </div>
 
@@ -103,6 +104,19 @@
                             <button class="btn btn-primary" onclick="showUploadModal()">📤 上传资料</button>
                         </div>
                         <div class="doc-grid" id="docList">
+                            <div class="loading"><div class="spinner"></div></div>
+                        </div>
+                    </div>
+
+                    <!-- 知识库面板 -->
+                    <div id="kbPanel" class="hidden">
+                        <div class="flex-between mb-2">
+                            <span class="text-muted" id="kbSummary">共 0 篇知识文档</span>
+                        </div>
+                        <p class="text-muted mb-2" style="font-size:13px;">
+                            知识库由上传的课程资料经 MinerU 自动转换生成，用于 AI 对话时的知识检索和引用。
+                        </p>
+                        <div class="doc-grid" id="kbList">
                             <div class="loading"><div class="spinner"></div></div>
                         </div>
                     </div>
@@ -543,9 +557,89 @@
                 tab.classList.add('active');
                 const tabName = tab.dataset.tab;
                 document.getElementById('docsPanel').classList.toggle('hidden', tabName !== 'docs');
+                document.getElementById('kbPanel').classList.toggle('hidden', tabName !== 'kb');
                 document.getElementById('tasksPanel').classList.toggle('hidden', tabName !== 'tasks');
+                if (tabName === 'kb' && !kbLoaded) {
+                    loadKnowledgeBase();
+                    kbLoaded = true;
+                }
             });
         });
+
+        let kbLoaded = false;
+
+        // 加载知识库
+        async function loadKnowledgeBase() {
+            const listEl = document.getElementById('kbList');
+            listEl.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+            try {
+                const res = await api.getKnowledgeBase(courseId);
+                const data = res.data;
+                document.getElementById('kbSummary').textContent = `共 ${data.total} 篇知识文档`;
+
+                if (!data.files || data.files.length === 0) {
+                    listEl.innerHTML = '<div class="empty-state"><p>暂无知识库文档</p><p class="text-muted" style="font-size:13px;">上传资料并配置 MinerU 后，转换的 Markdown 文件将显示在这里</p></div>';
+                    return;
+                }
+
+                listEl.innerHTML = data.files.map(f => {
+                    const sizeKB = (f.size / 1024).toFixed(1);
+                    const chunks = f.chunk_count || 0;
+                    return `
+                        <div class="doc-card">
+                            <div class="doc-card-icon">📄</div>
+                            <div class="doc-card-info">
+                                <div class="doc-card-name" title="${f.display_name}">${f.display_name}</div>
+                                <div class="doc-card-meta">
+                                    <span>${sizeKB} KB</span>
+                                    ${chunks ? `<span>· ${chunks} 个分块</span>` : ''}
+                                    <span>· 来源: ${f.original_name}</span>
+                                </div>
+                            </div>
+                            <div class="doc-card-actions">
+                                ${f.doc_id ? `<button class="btn btn-sm btn-outline" onclick="previewMarkdown(${f.doc_id}, '${f.display_name}')">预览</button>` : ''}
+                            </div>
+                        </div>`;
+                }).join('');
+            } catch (e) {
+                listEl.innerHTML = '<div class="empty-state"><p>加载失败</p></div>';
+                console.error(e);
+            }
+        }
+
+        // 预览 Markdown
+        async function previewMarkdown(docId, name) {
+            try {
+                const res = await api.getDocumentMarkdown(docId);
+                const content = res.data.content;
+                // 简单弹窗预览
+                const w = window.open('', '_blank', 'width=800,height=600');
+                w.document.write(`<html><head><title>${name} - 知识库预览</title>
+                    <style>body{font-family:system-ui;max-width:800px;margin:40px auto;padding:0 20px;line-height:1.6;color:#333;}
+                    pre{background:#f5f5f5;padding:12px;border-radius:6px;overflow-x:auto;}
+                    table{border-collapse:collapse;width:100%;}td,th{border:1px solid #ddd;padding:8px;}
+                    h1,h2,h3{color:#1a1a1a;}</style></head>
+                    <body><h1>${name}</h1><hr>${markedToHtml(content)}</body></html>`);
+                w.document.close();
+            } catch (e) {
+                alert('预览失败: ' + (e.message || e));
+            }
+        }
+
+        // 简易 Markdown → HTML
+        function markedToHtml(md) {
+            return md
+                .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+                .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+                .replace(/^# (.+)$/gm, '<h1>$1</h1>')
+                .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+                .replace(/\*(.+?)\*/g, '<em>$1</em>')
+                .replace(/`(.+?)`/g, '<code>$1</code>')
+                .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1" style="max-width:100%;">')
+                .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>')
+                .replace(/\n\n/g, '</p><p>')
+                .replace(/\n/g, '<br>');
+        }
 
         // 初始化
         loadCourse();

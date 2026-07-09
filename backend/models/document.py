@@ -76,7 +76,7 @@ class Document:
         """更新文档处理状态字段"""
         allowed = {'processing_status', 'processing_progress', 'processing_error',
                    'page_count', 'chunk_count', 'structured_content', 'toc_tree', 'metadata_json',
-                   'content_text'}
+                   'content_text', 'md_path'}
         updates = {k: v for k, v in kwargs.items() if k in allowed}
         if not updates:
             return

@@ -1,5 +1,7 @@
 import os
+import re
 import uuid
+import shutil
 from flask import Blueprint, request, send_file, jsonify
 from werkzeug.utils import secure_filename
 from config import Config
@@ -74,14 +76,30 @@ def upload_document(current_user):
     file_size = os.path.getsize(file_path)
     file_type = ext
 
-    # 提取文本内容（简单处理，txt文件直接读取）
+    # 提取文本内容（简单处理，txt 和 md 文件直接读取）
     content_text = ''
-    if ext == 'txt':
+    md_path = ''
+    if ext in ('txt', 'md'):
         try:
             with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
-                content_text = f.read()[:5000]  # 只取前5000字符
+                content_text = f.read()[:5000]
         except Exception:
             pass
+
+    # md 文件直接放入知识库目录: uploads/{课程名}/{资料名}.md
+    if ext == 'md':
+        safe_course_name = re.sub(r'[\\/:*?"<>|]', '_', course['name']).strip() or 'unnamed'
+        kb_dir = os.path.join(Config.UPLOAD_FOLDER, safe_course_name)
+        os.makedirs(kb_dir, exist_ok=True)
+        # 生成知识库文件名：原始名（去扩展名）+ doc_id 占位（后面更新）
+        kb_name = original_name.rsplit('.', 1)[0] if '.' in original_name else original_name
+        kb_name = re.sub(r'[\\/:*?"<>|]', '_', kb_name).strip() or 'document'
+        md_dest = os.path.join(kb_dir, f'{kb_name}.md')
+        # 处理重名
+        if os.path.exists(md_dest):
+            md_dest = os.path.join(kb_dir, f'{kb_name}_{uuid.uuid4().hex[:6]}.md')
+        shutil.copy2(file_path, md_dest)
+        md_path = md_dest
 
     # 保存记录
     doc_id = Document.create(
@@ -95,6 +113,10 @@ def upload_document(current_user):
         category=category,
         content_text=content_text
     )
+
+    # md 文件：记录知识库路径
+    if md_path:
+        Document.update_processing(doc_id, md_path=md_path)
 
     # 触发异步处理管线（所有格式都走管线，包括 txt）
     try:
@@ -164,6 +186,19 @@ def delete_document(current_user, doc_id):
     # 删除物理文件
     if os.path.exists(doc['file_path']):
         os.remove(doc['file_path'])
+
+    # 删除 MinerU 生成的 .md 和图片
+    md_path = doc.get('md_path', '')
+    if md_path and os.path.exists(md_path):
+        os.remove(md_path)
+        # 清理空 images/ 目录
+        images_dir = os.path.join(os.path.dirname(md_path), 'images')
+        if os.path.isdir(images_dir) and not os.listdir(images_dir):
+            os.rmdir(images_dir)
+        # 清理空课程目录
+        course_dir = os.path.dirname(md_path)
+        if os.path.isdir(course_dir) and not os.listdir(course_dir):
+            os.rmdir(course_dir)
 
     Document.delete(doc_id)
     return success_response(msg='删除成功')
@@ -248,3 +283,29 @@ def get_document_chunks(current_user, doc_id):
     for c in chunks:
         c['created_at'] = str(c['created_at'])
     return success_response(chunks)
+
+
+@document_bp.route('/<int:doc_id>/markdown', methods=['GET'])
+@token_required
+def get_markdown(current_user, doc_id):
+    """获取 MinerU 生成的 Markdown 内容"""
+    doc = Document.find_by_id(doc_id)
+    if not doc:
+        return error_response('资料不存在', 404)
+
+    # 检查权限
+    course = Course.find_by_id(doc['course_id'])
+    if not course or course['user_id'] != current_user['id']:
+        return error_response('无权访问', 403)
+
+    md_path = doc.get('md_path', '')
+    if not md_path or not os.path.exists(md_path):
+        return error_response('Markdown 文件不可用', 404)
+
+    with open(md_path, 'r', encoding='utf-8') as f:
+        content = f.read()
+
+    return success_response({
+        'content': content,
+        'filename': doc['original_name'],
+    })

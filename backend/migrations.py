@@ -36,6 +36,17 @@ def run_migrations():
         # database.py 的 _init_db() 已包含迁移逻辑
         # 重新调用 _init_db() 确保新表和字段存在
         db._init_db()
+
+        # 为已有 documents 表添加 md_path 列（幂等）
+        conn = db.get_connection()
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA table_info(documents)")
+        existing_cols = {row[1] for row in cursor.fetchall()}
+        if 'md_path' not in existing_cols:
+            cursor.execute("ALTER TABLE documents ADD COLUMN md_path VARCHAR(500) DEFAULT ''")
+            conn.commit()
+            print("  [OK] 已添加 documents.md_path 列")
+
         print("  [OK] 数据库表结构迁移完成")
     except Exception as e:
         print(f"  [FAIL] 数据库迁移失败: {e}")
@@ -59,7 +70,8 @@ def run_migrations():
     cursor.execute("PRAGMA table_info(documents)")
     doc_columns = {row[1] for row in cursor.fetchall()}
     expected = {'processing_status', 'processing_progress', 'processing_error',
-                'structured_content', 'toc_tree', 'page_count', 'chunk_count', 'metadata_json'}
+                'structured_content', 'toc_tree', 'page_count', 'chunk_count', 'metadata_json',
+                'md_path'}
     missing = expected - doc_columns
     if missing:
         print(f"  [FAIL] documents 表缺少列: {missing}")

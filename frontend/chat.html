@@ -309,7 +309,13 @@
                         const courseRefs = citations.filter(c => c.source !== 'temp_file');
                         const tempRefs = citations.filter(c => c.source === 'temp_file');
                         let refHtml = '';
-                        if (courseRefs.length) refHtml += '📚 课程资料: ' + courseRefs.map(r => `[${r.num}]`).join(' ') + ' ';
+                        if (courseRefs.length) {
+                            refHtml += '📚 引用来源: ' + courseRefs.map(r => {
+                                const name = r.doc_name || `文档${r.document_id || ''}`;
+                                const heading = r.heading_path ? ` > ${r.heading_path}` : '';
+                                return `<span title="${name}${heading}" style="cursor:help;">[${r.num}] ${name}</span>`;
+                            }).join('、') + ' ';
+                        }
                         if (tempRefs.length) refHtml += '<span class="temp-file-badge">临时文件</span>';
                         refsEl.innerHTML = refHtml;
                         refsEl.classList.remove('hidden');

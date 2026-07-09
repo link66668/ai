@@ -1,4 +1,7 @@
 from flask import Blueprint, request
+import os
+import re
+from config import Config
 from models.course import Course
 from models.document import Document
 from .utils import token_required, success_response, error_response
@@ -161,3 +164,56 @@ def archive_course(current_user, course_id):
 
     Course.archive(course_id)
     return success_response(msg='归档成功')
+
+
+@course_bp.route('/<int:course_id>/knowledge-base', methods=['GET'])
+@token_required
+def get_knowledge_base(current_user, course_id):
+    """获取课程知识库（MinerU 转换的 Markdown 文件列表）"""
+    course = Course.find_by_id(course_id)
+    if not course:
+        return error_response('课程不存在', 404)
+
+    if course['user_id'] != current_user['id']:
+        return error_response('无权访问', 403)
+
+    # 构建知识库目录路径: uploads/{课程名}/
+    safe_name = re.sub(r'[\\/:*?"<>|]', '_', course['name']).strip() or 'unnamed'
+    kb_dir = os.path.join(Config.UPLOAD_FOLDER, safe_name)
+
+    kb_files = []
+    if os.path.isdir(kb_dir):
+        for fname in sorted(os.listdir(kb_dir)):
+            if fname.endswith('.md'):
+                fpath = os.path.join(kb_dir, fname)
+                stat = os.stat(fpath)
+                # 查找关联的文档记录（通过 md_path 匹配）
+                doc_info = _find_doc_by_md_path(course_id, fpath)
+                kb_files.append({
+                    'filename': fname,
+                    'display_name': fname.rsplit('.', 1)[0],
+                    'size': stat.st_size,
+                    'updated_at': stat.st_mtime,
+                    'doc_id': doc_info.get('doc_id') if doc_info else None,
+                    'original_name': doc_info.get('original_name') if doc_info else fname,
+                    'chunk_count': doc_info.get('chunk_count', 0) if doc_info else 0,
+                })
+
+    return success_response({
+        'course_name': course['name'],
+        'kb_dir': safe_name,
+        'total': len(kb_files),
+        'files': kb_files,
+    })
+
+
+def _find_doc_by_md_path(course_id, md_path):
+    """通过 md_path 查找关联的文档记录"""
+    from database import db
+    doc = db.fetch_one(
+        "SELECT id, original_name, chunk_count FROM documents WHERE course_id = ? AND md_path = ?",
+        (course_id, md_path)
+    )
+    if doc:
+        return {'doc_id': doc['id'], 'original_name': doc['original_name'], 'chunk_count': doc.get('chunk_count', 0)}
+    return None

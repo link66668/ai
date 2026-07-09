@@ -199,6 +199,7 @@ def send_message_stream(current_user, conv_id):
 
     def generate():
         full_response = ''
+        citations = []
 
         for event in stream_gen:
             # 解析 SSE 事件提取内容
@@ -207,9 +208,19 @@ def send_message_stream(current_user, conv_id):
                     event_data = json.loads(event[6:])
                     if event_data.get('done'):
                         interrupted = event_data.get('interrupted', False)
+                        citations = event_data.get('citations', [])
                         if full_response.strip():
+                            # 将 citations 转为 references 格式保存到数据库
+                            refs = []
+                            for c in citations:
+                                refs.append({
+                                    'num': c.get('num'),
+                                    'document_id': c.get('document_id', ''),
+                                    'heading_path': c.get('heading_path', ''),
+                                    'source': c.get('source', 'course_kb'),
+                                })
                             Message.create(
-                                conv_id, 'assistant', full_response, []
+                                conv_id, 'assistant', full_response, refs
                             )
                         if not interrupted and len(history) <= 1:
                             title = content[:20] + ('...' if len(content) > 20 else '')
