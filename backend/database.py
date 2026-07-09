@@ -58,6 +58,14 @@ class Database:
                     file_size INT DEFAULT 0,
                     category TEXT DEFAULT '其他' CHECK(category IN ('课件', '实验指导', '作业', '笔记', '其他')),
                     content_text TEXT,
+                    processing_status TEXT DEFAULT 'pending',
+                    processing_progress REAL DEFAULT 0.0,
+                    processing_error TEXT,
+                    structured_content TEXT,
+                    toc_tree TEXT,
+                    page_count INTEGER DEFAULT 0,
+                    chunk_count INTEGER DEFAULT 0,
+                    metadata_json TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE,
                     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
@@ -131,9 +139,6 @@ class Database:
 
             # ========== 全格式文档引擎 + RAG 新增表 ==========
 
-            # 迁移 documents 表：添加处理相关字段（幂等——仅添加不存在的列）
-            self._migrate_documents_table(cursor)
-
             # 文档分块表
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS document_chunks (
@@ -189,32 +194,6 @@ class Database:
             print(f"[数据库初始化错误] {e}")
         finally:
             cursor.close()
-
-    def _migrate_documents_table(self, cursor):
-        """为 documents 表添加处理相关字段（幂等迁移）"""
-        # 获取现有列
-        cursor.execute("PRAGMA table_info(documents)")
-        existing_columns = {row[1] for row in cursor.fetchall()}
-
-        # 需要添加的新列定义
-        new_columns = [
-            ('processing_status', "TEXT DEFAULT 'pending'"),
-            ('processing_progress', 'REAL DEFAULT 0.0'),
-            ('processing_error', 'TEXT'),
-            ('structured_content', 'TEXT'),
-            ('toc_tree', 'TEXT'),
-            ('page_count', 'INTEGER DEFAULT 0'),
-            ('chunk_count', 'INTEGER DEFAULT 0'),
-            ('metadata_json', 'TEXT'),
-        ]
-
-        for col_name, col_def in new_columns:
-            if col_name not in existing_columns:
-                try:
-                    cursor.execute(f"ALTER TABLE documents ADD COLUMN {col_name} {col_def}")
-                    print(f"[数据库迁移] documents 表添加列: {col_name}")
-                except Exception as e:
-                    print(f"[数据库迁移] 添加列 {col_name} 失败: {e}")
 
     def get_connection(self):
         """获取当前线程的数据库连接"""
