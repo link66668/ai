@@ -263,8 +263,12 @@ def upload_temp_file(current_user, conv_id):
         # 获取或创建会话
         session_id = temp_file_manager.get_or_create_session(conv_id)
 
+        # 获取用户AI配置（供图片解析使用）
+        from models.user_ai_config import UserAIConfig
+        ai_config = UserAIConfig.get_effective_config(current_user['id'])
+
         # 添加文件
-        result = temp_file_manager.add_file(session_id, file, original_name, ext)
+        result = temp_file_manager.add_file(session_id, file, original_name, ext, ai_config=ai_config)
 
         return success_response({
             'session_id': session_id,

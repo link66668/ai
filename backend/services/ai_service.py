@@ -1,6 +1,7 @@
 import json
 import re
 import requests
+import base64
 from config import Config
 from models.document import Document
 from models.course import Course
@@ -1074,7 +1075,7 @@ class AIService:
     def chat_rag(self, message, course_id=None, conversation_history=None,
                  temp_file_session_id=None, stream=False, ai_config=None):
         """
-        对话引擎 — 直接将用户消息（+ 临时文件）传给对话模型
+        对话引擎 — 支持多模态图片（图片以 image_url 格式传给视觉模型）
 
         Args:
             message: 用户消息
@@ -1090,7 +1091,7 @@ class AIService:
         """
         from services.temp_file_service import temp_file_manager
 
-        # 1. 获取临时文件上下文
+        # 1. 获取临时文件上下文（文本部分）
         temp_text = ''
         if temp_file_session_id:
             try:
@@ -1100,28 +1101,34 @@ class AIService:
             except Exception as e:
                 print(f"[Chat] 获取临时文件失败: {e}")
 
-        # 2. 构建 messages（对话历史 + 临时文件 + 用户消息）
+        # 2. 获取临时文件中的图片原始数据（用于多模态消息）
+        image_data_list = []
+        if temp_file_session_id:
+            try:
+                image_data_list = temp_file_manager.get_image_data(temp_file_session_id)
+            except Exception as e:
+                print(f"[Chat] 获取图片数据失败: {e}")
+
+        # 3. 构建 messages（对话历史 + 临时文件 + 用户消息 + 图片）
         messages = []
 
         # 系统提示
         messages.append({
             'role': 'system',
-            'content': '你是课程学习助手，用中文回答。回答简洁准确，不要过度展开。'
+            'content': '你是课程学习助手，用中文回答。回答简洁准确，不要过度展开。如果用户发送了图片，请仔细分析图片内容并回答问题。'
         })
 
         # 对话历史
         if conversation_history:
             messages.extend(conversation_history)
 
-        # 临时文件内容
-        user_content = ''
-        if temp_text:
-            user_content += f'{temp_text}\n\n'
+        # 构建用户消息（含图片时使用多模态格式）
+        user_message = self._build_multimodal_user_message(
+            message, temp_text, image_data_list
+        )
+        messages.append(user_message)
 
-        user_content += message
-        messages.append({'role': 'user', 'content': user_content})
-
-        # 3. 调用对话模型
+        # 4. 调用对话模型
         if stream:
             from services.streaming_service import streaming_service
 
@@ -1134,7 +1141,23 @@ class AIService:
                     ):
                         yield event
                 except Exception as e:
-                    print(f"[Chat] 流式调用失败，降级到阻塞模式: {e}")
+                    print(f"[Chat] 流式调用失败: {e}")
+
+                    # 如果是多模态消息失败（模型可能不支持视觉），回退到纯文本
+                    if image_data_list:
+                        print("[Chat] 多模态调用失败，回退到纯文本模式")
+                        text_messages = self._strip_images_from_messages(messages)
+                        try:
+                            response_text = streaming_service.blocking_chat(
+                                text_messages, ai_config=ai_config,
+                            )
+                            for event in streaming_service.pseudo_stream(response_text):
+                                yield event
+                            return
+                        except Exception as e2:
+                            print(f"[Chat] 纯文本回退也失败: {e2}")
+
+                    # 最终回退到 mock 模式
                     try:
                         response_text = streaming_service.blocking_chat(
                             messages, ai_config=ai_config,
@@ -1156,8 +1179,92 @@ class AIService:
                 )
                 return {'response': response_text, 'references': []}
             except Exception as e:
+                # 多模态失败时回退到纯文本
+                if image_data_list:
+                    print(f"[Chat] 多模态阻塞调用失败，回退到纯文本: {e}")
+                    text_messages = self._strip_images_from_messages(messages)
+                    try:
+                        response_text = streaming_service.blocking_chat(
+                            text_messages, ai_config=ai_config,
+                        )
+                        return {'response': response_text, 'references': []}
+                    except Exception as e2:
+                        print(f"[Chat] 纯文本回退也失败: {e2}")
+
                 print(f"[Chat] LLM 阻塞调用失败，回退到 mock 模式: {e}")
                 return self.chat(message, course_id, conversation_history)
+
+    def _build_multimodal_user_message(self, message, temp_text, image_data_list):
+        """
+        构建用户消息 — 有图片时用 OpenAI 多模态格式，无图片时纯文本
+
+        Args:
+            message: 用户文字消息
+            temp_text: 临时文件解析的文本内容
+            image_data_list: 图片数据列表 [{filename, image_bytes, mime_type}]
+
+        Returns:
+            dict: 消息字典（content 为 str 或 list）
+        """
+        if not image_data_list:
+            # 无图片 — 纯文本消息
+            user_content = ''
+            if temp_text:
+                user_content += f'{temp_text}\n\n'
+            user_content += message
+            return {'role': 'user', 'content': user_content}
+
+        # 有图片 — 多模态格式
+        content_parts = []
+
+        # 添加图片（base64 编码）
+        for img in image_data_list:
+            try:
+                b64 = base64.b64encode(img['image_bytes']).decode('utf-8')
+                content_parts.append({
+                    'type': 'image_url',
+                    'image_url': {
+                        'url': f'data:{img["mime_type"]};base64,{b64}',
+                        'detail': 'high',
+                    }
+                })
+            except Exception as e:
+                print(f"[Chat] 图片编码失败: {img.get('filename', '?')}: {e}")
+
+        # 添加文本部分
+        text_content = ''
+        if temp_text:
+            text_content += f'{temp_text}\n\n'
+        text_content += message
+
+        content_parts.append({
+            'type': 'text',
+            'text': text_content
+        })
+
+        return {'role': 'user', 'content': content_parts}
+
+    @staticmethod
+    def _strip_images_from_messages(messages):
+        """
+        将多模态消息降级为纯文本（移除 image_url 部分）
+
+        用于模型不支持视觉输入时的回退处理。
+        """
+        stripped = []
+        for msg in messages:
+            if isinstance(msg.get('content'), list):
+                text_parts = []
+                for part in msg['content']:
+                    if part.get('type') == 'text':
+                        text_parts.append(part['text'])
+                stripped.append({
+                    'role': msg['role'],
+                    'content': '\n'.join(text_parts)
+                })
+            else:
+                stripped.append(msg)
+        return stripped
 
     @staticmethod
     def _build_citation_markdown(citations):

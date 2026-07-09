@@ -65,7 +65,7 @@ class TempFileManager:
                 return sid
         return self.create_session(conversation_id)
 
-    def add_file(self, session_id, file_obj, filename, file_type=''):
+    def add_file(self, session_id, file_obj, filename, file_type='', ai_config=None):
         """
         添加临时文件到会话（异步处理，立即返回）
 
@@ -111,7 +111,7 @@ class TempFileManager:
         import threading
         def parse_worker():
             try:
-                preview_text = self._parse_file(file_data, filename, file_type)
+                preview_text = self._parse_file(file_data, filename, file_type, ai_config=ai_config)
                 self._file_texts[file_id] = preview_text
                 self._file_status[file_id] = 'done'
                 print(f"[TempFile] 文件 {filename} 异步处理完成 ({len(preview_text)} 字符)")
@@ -132,7 +132,7 @@ class TempFileManager:
             'status': 'processing',
         }
 
-    def _parse_file(self, file_data, filename, file_type):
+    def _parse_file(self, file_data, filename, file_type, ai_config=None):
         """轻量解析文件内容"""
         import os
         import tempfile
@@ -149,7 +149,7 @@ class TempFileManager:
                 tmp_path = tmp.name
 
             parser = LightweightParser()
-            text = parser.parse(tmp_path, file_type)
+            text = parser.parse(tmp_path, file_type, ai_config=ai_config)
             return text
         except Exception as e:
             logger.warning(f"临时文件解析失败: {e}")
@@ -197,11 +197,61 @@ class TempFileManager:
                 # 仍在处理中 → 添加占位提示
                 if status == 'processing':
                     parts.append(f'[临时文件: {fmeta["filename"]}]\n（文件仍在处理中，内容暂不可用。请稍后再试。）')
+                elif status == 'error':
+                    parts.append(f'[临时文件: {fmeta["filename"]}]\n（文件处理失败，无法识别内容）')
                 continue
             text = self._file_texts.get(fid, '')
             if text:
                 parts.append(f'[临时文件: {fmeta["filename"]}]\n{text}')
         return '\n\n'.join(parts)
+
+    def get_image_data(self, session_id):
+        """
+        获取会话中所有图片文件的原始字节数据（用于多模态消息构建）
+
+        Returns:
+            list[dict]: [{filename, file_type, image_bytes, mime_type}]
+        """
+        if session_id not in self._sessions:
+            return []
+
+        session = self._sessions[session_id]
+        images = []
+        image_types = {'png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp'}
+
+        for fmeta in session['files']:
+            fid = fmeta['file_id']
+            file_type = fmeta.get('file_type', '').lower()
+
+            if file_type not in image_types:
+                continue
+
+            # 只处理已完成的文件
+            status = self._file_status.get(fid, 'done')
+            if status != 'done':
+                continue
+
+            encrypted = self._file_contents.get(fid)
+            if not encrypted:
+                continue
+
+            try:
+                image_bytes = self._fernet.decrypt(encrypted)
+                mime_map = {
+                    'png': 'image/png', 'jpg': 'image/jpeg',
+                    'jpeg': 'image/jpeg', 'gif': 'image/gif',
+                    'bmp': 'image/bmp', 'webp': 'image/webp',
+                }
+                images.append({
+                    'filename': fmeta['filename'],
+                    'file_type': file_type,
+                    'image_bytes': image_bytes,
+                    'mime_type': mime_map.get(file_type, 'image/jpeg'),
+                })
+            except Exception as e:
+                logger.warning(f"解密图片数据失败: {fmeta['filename']}: {e}")
+
+        return images
 
     def get_file_list(self, session_id):
         """获取会话文件列表（不含内容）"""
