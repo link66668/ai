@@ -226,22 +226,31 @@ class VisionService:
 
         try:
             from openai import OpenAI
+            from models.user_ai_config import UserAIConfig
+            from services.user_context import get_current_user_id
 
-            if self._client is None:
-                self._client = OpenAI(
-                    base_url=Config.VISION_API_URL,
-                    api_key=Config.VISION_API_KEY,
-                    timeout=120.0,  # 图片理解可能需要较长时间
-                )
-                logger.info(
-                    f"[Vision] 客户端已初始化: {Config.VISION_API_URL} "
-                    f"model={Config.VISION_MODEL}"
-                )
+            # 获取用户配置
+            user_id = get_current_user_id()
+            if user_id:
+                config = UserAIConfig.get_effective_config(user_id)
+            else:
+                config = {
+                    'vision_api_key': Config.VISION_API_KEY,
+                    'vision_api_url': Config.VISION_API_URL,
+                    'vision_model': Config.VISION_MODEL,
+                }
+
+            # 每次调用都创建新客户端以支持用户配置（缓存会降低灵活性）
+            client = OpenAI(
+                base_url=config['vision_api_url'],
+                api_key=config['vision_api_key'],
+                timeout=120.0,  # 图片理解可能需要较长时间
+            )
 
             messages = self._build_vision_messages(image_data_uri)
 
-            response = self._client.chat.completions.create(
-                model=Config.VISION_MODEL,
+            response = client.chat.completions.create(
+                model=config['vision_model'],
                 messages=messages,
                 max_tokens=4096,
                 temperature=0.1,  # 低温度确保文字识别准确

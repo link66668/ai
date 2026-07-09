@@ -184,6 +184,29 @@ class Database:
                 )
             ''')
 
+            # 用户 AI 配置表（存储每个用户的 API Key 和模型配置）
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS user_ai_configs (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL UNIQUE,
+                    -- 对话模型配置
+                    ai_api_key VARCHAR(500) DEFAULT '',
+                    ai_api_url VARCHAR(500) DEFAULT '',
+                    ai_model VARCHAR(100) DEFAULT '',
+                    -- 视觉模型配置
+                    vision_api_key VARCHAR(500) DEFAULT '',
+                    vision_api_url VARCHAR(500) DEFAULT '',
+                    vision_model VARCHAR(100) DEFAULT '',
+                    -- 嵌入模型配置
+                    embedding_api_key VARCHAR(500) DEFAULT '',
+                    embedding_api_url VARCHAR(500) DEFAULT '',
+                    embedding_model VARCHAR(100) DEFAULT '',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+                )
+            ''')
+
             conn.commit()
         except Exception as e:
             print(f"[数据库初始化错误] {e}")

@@ -717,17 +717,41 @@ class AIService:
 - description 要给出操作指南（如"先阅读教材第二章，重点理解ε-δ定义，然后完成课后习题2.1-2.3"）
 - suggested_hours 是建议学习时长，可为浮点数"""
 
-    def _call_llm(self, messages, temperature=0.7, max_tokens=4096):
-        """调用 DeepSeek API"""
+    def _call_llm(self, messages, temperature=0.7, max_tokens=4096, user_id=None):
+        """调用 DeepSeek API
+
+        Args:
+            messages: 消息列表
+            temperature: 温度参数
+            max_tokens: 最大 token 数
+            user_id: 用户 ID（可选），用于获取用户专属配置。如果不传，则从上下文获取
+        """
         try:
+            # 获取有效的 AI 配置（用户配置优先）
+            from models.user_ai_config import UserAIConfig
+            from services.user_context import get_current_user_id
+
+            # 如果没有传入 user_id，尝试从上下文获取
+            if user_id is None:
+                user_id = get_current_user_id()
+
+            if user_id:
+                config = UserAIConfig.get_effective_config(user_id)
+            else:
+                config = {
+                    'ai_api_key': Config.AI_API_KEY,
+                    'ai_api_url': Config.AI_API_URL,
+                    'ai_model': Config.AI_MODEL,
+                }
+
             resp = requests.post(
-                f"{Config.AI_API_URL}/v1/chat/completions",
+                f"{config['ai_api_url']}/v1/chat/completions",
                 headers={
-                    "Authorization": f"Bearer {Config.AI_API_KEY}",
+                    "Authorization": f"Bearer {config['ai_api_key']}",
                     "Content-Type": "application/json"
                 },
                 json={
-                    "model": Config.AI_MODEL,
+                    "model": config['ai_model'],
                     "messages": messages,
                     "temperature": temperature,
                     "max_tokens": max_tokens

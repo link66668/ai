@@ -409,6 +409,36 @@ class ApiClient {
     async reprocessDocument(docId) {
         return this.post(`/documents/${docId}/reprocess`);
     }
+
+    // ========== 用户 AI 配置 ==========
+
+    /**
+     * 获取当前用户的 AI 配置
+     */
+    async getUserAIConfig() {
+        return this.get('/user/ai-config/');
+    }
+
+    /**
+     * 更新当前用户的 AI 配置
+     */
+    async updateUserAIConfig(data) {
+        return this.put('/user/ai-config/', data);
+    }
+
+    /**
+     * 测试 AI 配置连接
+     */
+    async testAIConfig(type) {
+        return this.post('/user/ai-config/test', { type });
+    }
+
+    /**
+     * 删除当前用户的 AI 配置（恢复默认）
+     */
+    async deleteUserAIConfig() {
+        return this.delete('/user/ai-config/');
+    }
 }
 
 const api = new ApiClient();

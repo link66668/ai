@@ -5,5 +5,6 @@ from .chat import chat_bp
 from .task import task_bp
 from .plan import plan_bp
 from .agent import agent_bp
+from .user_ai_config import user_ai_config_bp
 
-__all__ = ['auth_bp', 'course_bp', 'document_bp', 'chat_bp', 'task_bp', 'plan_bp', 'agent_bp']
+__all__ = ['auth_bp', 'course_bp', 'document_bp', 'chat_bp', 'task_bp', 'plan_bp', 'agent_bp', 'user_ai_config_bp']

@@ -9,18 +9,23 @@ load_dotenv(os.path.join(os.path.dirname(__file__), '.env'))
 
 from config import Config
 from database import db
-from routes import auth_bp, course_bp, document_bp, chat_bp, task_bp, plan_bp, agent_bp
+from routes import auth_bp, course_bp, document_bp, chat_bp, task_bp, plan_bp, agent_bp, user_ai_config_bp
 
 def create_app():
     """创建Flask应用"""
     # 启动时校验必需的环境变量
-    required_vars = ['SECRET_KEY', 'AI_API_KEY']
+    required_vars = ['SECRET_KEY']
     missing = [v for v in required_vars if not os.environ.get(v)]
     if missing:
         raise RuntimeError(
             f'缺少必需的环境变量: {", ".join(missing)}，'
             f'请检查 backend/.env 文件是否存在且配置正确'
         )
+
+    # 可选：检查 AI 配置
+    if not os.environ.get('AI_API_KEY'):
+        print('[WARNING] AI_API_KEY not configured, AI features will use Mock mode')
+        print('[INFO] To enable real AI, configure AI_API_KEY in backend/.env')
 
     app = Flask(__name__, static_folder='../frontend', static_url_path='')
 
@@ -43,6 +48,7 @@ def create_app():
     app.register_blueprint(task_bp)
     app.register_blueprint(plan_bp)
     app.register_blueprint(agent_bp)
+    app.register_blueprint(user_ai_config_bp)
 
     # ---- 全局错误处理（API统一返回JSON） ----
     @app.errorhandler(404)

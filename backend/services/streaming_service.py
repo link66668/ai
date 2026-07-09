@@ -56,10 +56,23 @@ class StreamingService:
 
         try:
             from openai import OpenAI
+            from models.user_ai_config import UserAIConfig
+            from services.user_context import get_current_user_id
+
+            # 获取用户配置
+            user_id = get_current_user_id()
+            if user_id:
+                config = UserAIConfig.get_effective_config(user_id)
+            else:
+                config = {
+                    'ai_api_key': Config.AI_API_KEY,
+                    'ai_api_url': Config.AI_API_URL,
+                    'ai_model': Config.AI_MODEL,
+                }
 
             client = OpenAI(
-                base_url=Config.AI_API_URL,
-                api_key=Config.AI_API_KEY,
+                base_url=config['ai_api_url'],
+                api_key=config['ai_api_key'],
                 timeout=90.0,
             )
 
@@ -68,7 +81,7 @@ class StreamingService:
                 self.clear_interrupted(conversation_id)
 
             stream = client.chat.completions.create(
-                model=Config.AI_MODEL,
+                model=config['ai_model'],
                 messages=messages,
                 stream=True,
                 temperature=temperature,
@@ -121,15 +134,28 @@ class StreamingService:
         """
         try:
             from openai import OpenAI
+            from models.user_ai_config import UserAIConfig
+            from services.user_context import get_current_user_id
+
+            # 获取用户配置
+            user_id = get_current_user_id()
+            if user_id:
+                config = UserAIConfig.get_effective_config(user_id)
+            else:
+                config = {
+                    'ai_api_key': Config.AI_API_KEY,
+                    'ai_api_url': Config.AI_API_URL,
+                    'ai_model': Config.AI_MODEL,
+                }
 
             client = OpenAI(
-                base_url=Config.AI_API_URL,
-                api_key=Config.AI_API_KEY,
+                base_url=config['ai_api_url'],
+                api_key=config['ai_api_key'],
                 timeout=90.0,
             )
 
             response = client.chat.completions.create(
-                model=Config.AI_MODEL,
+                model=config['ai_model'],
                 messages=messages,
                 stream=False,
                 temperature=temperature,

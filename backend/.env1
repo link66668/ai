@@ -1,0 +1,17 @@
+# ===== DeepSeek（对话模型）=====
+AI_API_KEY=sk-3eb7cf0d0d394f7db185c75f4ef9d335
+AI_API_URL=https://api.deepseek.com
+AI_MODEL=deepseek-chat
+
+# ===== 视觉模型（多模态识图）=====
+VISION_API_KEY=sk-ws-H.EMEHHYD.lnvR.MEUCIEVhty0XOHU0wkteIzkaDxnYKor6ME8GJTZuZH49vR6NAiEAuKXDDdn-CH9nBXFOs6oH2Qkgbr7FKu7Aed2W6S0vLYc
+VISION_API_URL=https://llm-ymtvx51icawuyqdm.cn-beijing.maas.aliyuncs.com/compatible-mode/v1
+VISION_MODEL=qwen-vl-max
+
+# ===== 嵌入模型（文本向量化）=====
+EMBEDDING_API_KEY=sk-ws-H.EMEHHYD.lnvR.MEUCIEVhty0XOHU0wkteIzkaDxnYKor6ME8GJTZuZH49vR6NAiEAuKXDDdn-CH9nBXFOs6oH2Qkgbr7FKu7Aed2W6S0vLYc
+EMBEDDING_API_URL=https://llm-ymtvx51icawuyqdm.cn-beijing.maas.aliyuncs.com/compatible-mode/v1
+EMBEDDING_MODEL=text-embedding-v3
+
+# ===== JWT 签名密钥 =====
+SECRET_KEY=course-agent-secret-key-2024

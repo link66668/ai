@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 模型配置 - 课程学习助手</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="page-wrapper">
+        <!-- 侧边栏 -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <h2>📚 学习助手</h2>
+            </div>
+            <nav class="sidebar-nav">
+                <a href="/dashboard.html" class="nav-item">
+                    <span class="icon">🏠</span> 仪表盘
+                </a>
+                <a href="/courses.html" class="nav-item">
+                    <span class="icon">📖</span> 课程管理
+                </a>
+                <a href="/chat.html" class="nav-item">
+                    <span class="icon">💬</span> Agent对话
+                </a>
+                <a href="/tasks.html" class="nav-item">
+                    <span class="icon">✅</span> 任务管理
+                </a>
+                <a href="/plan.html" class="nav-item">
+                    <span class="icon">📅</span> 学习计划
+                </a>
+                <a href="/profile.html" class="nav-item">
+                    <span class="icon">👤</span> 个人中心
+                </a>
+                <a href="/ai_settings.html" class="nav-item active">
+                    <span class="icon">🔧</span> AI 模型配置
+                </a>
+            </nav>
+            <div class="sidebar-footer">
+                <button class="btn btn-outline btn-block" onclick="logout()">退出登录</button>
+            </div>
+        </aside>
+
+        <!-- 主内容 -->
+        <main class="main-content">
+            <div class="topbar">
+                <h1>🔧 AI 模型配置</h1>
+                <p style="color: var(--text-light); margin-top: 0.5rem;">
+                    配置您自己的 API Key，留空则使用系统默认配置
+                </p>
+            </div>
+
+            <!-- 提示信息 -->
+            <div class="card mb-3" style="background: var(--primary-light); border-left: 4px solid var(--primary);">
+                <div class="card-body">
+                    <strong>💡 说明：</strong>
+                    <ul style="margin: 0.5rem 0 0 1.5rem; color: var(--text-medium);">
+                        <li>每个用户的配置相互独立，互不影响</li>
+                        <li>API Key 仅您自己可见，系统会加密存储</li>
+                        <li>如不填写，将使用系统全局配置的模型</li>
+                        <li>配置保存后，可点击"测试连接"验证是否有效</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- 对话模型配置 -->
+            <div class="card mb-3">
+                <div class="card-header">
+                    <h3>💬 对话模型</h3>
+                    <span class="badge" id="chatModelStatus">未配置</span>
+                </div>
+                <div class="card-body">
+                    <form id="chatModelForm">
+                        <div class="form-group">
+                            <label class="form-label">API Key</label>
+                            <input type="password" class="form-control" id="chatApiKey"
+                                   placeholder="sk-xxxxxxxxxxxxxxxxxxxxxxxx">
+                            <small class="form-text">您的 API Key 将安全存储，仅用于调用对话模型</small>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group" style="flex: 2;">
+                                <label class="form-label">API 地址</label>
+                                <input type="text" class="form-control" id="chatApiUrl"
+                                       placeholder="https://api.deepseek.com">
+                            </div>
+                            <div class="form-group" style="flex: 1;">
+                                <label class="form-label">模型名称</label>
+                                <input type="text" class="form-control" id="chatModel"
+                                       placeholder="deepseek-chat">
+                            </div>
+                        </div>
+                        <div class="form-actions">
+                            <button type="button" class="btn btn-outline" onclick="testConnection('chat')">
+                                🔌 测试连接
+                            </button>
+                            <button type="submit" class="btn btn-primary">保存配置</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- 视觉模型配置 -->
+            <div class="card mb-3">
+                <div class="card-header">
+                    <h3>👁️ 视觉模型</h3>
+                    <span class="badge" id="visionModelStatus">未配置</span>
+                </div>
+                <div class="card-body">
+                    <form id="visionModelForm">
+                        <div class="form-group">
+                            <label class="form-label">API Key</label>
+                            <input type="password" class="form-control" id="visionApiKey"
+                                   placeholder="sk-xxxxxxxxxxxxxxxxxxxxxxxx">
+                            <small class="form-text">用于图片和 PDF 扫描件的 OCR 识别</small>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group" style="flex: 2;">
+                                <label class="form-label">API 地址</label>
+                                <input type="text" class="form-control" id="visionApiUrl"
+                                       placeholder="https://api.openai.com/v1">
+                            </div>
+                            <div class="form-group" style="flex: 1;">
+                                <label class="form-label">模型名称</label>
+                                <input type="text" class="form-control" id="visionModel"
+                                       placeholder="qwen-vl-max">
+                            </div>
+                        </div>
+                        <div class="form-actions">
+                            <button type="button" class="btn btn-outline" onclick="testConnection('vision')">
+                                🔌 测试连接
+                            </button>
+                            <button type="submit" class="btn btn-primary">保存配置</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- 嵌入模型配置 -->
+            <div class="card mb-3">
+                <div class="card-header">
+                    <h3>🔢 嵌入模型</h3>
+                    <span class="badge" id="embeddingModelStatus">未配置</span>
+                </div>
+                <div class="card-body">
+                    <form id="embeddingModelForm">
+                        <div class="form-group">
+                            <label class="form-label">API Key</label>
+                            <input type="password" class="form-control" id="embeddingApiKey"
+                                   placeholder="sk-xxxxxxxxxxxxxxxxxxxxxxxx">
+                            <small class="form-text">用于文档向量化和 RAG 检索增强</small>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group" style="flex: 2;">
+                                <label class="form-label">API 地址</label>
+                                <input type="text" class="form-control" id="embeddingApiUrl"
+                                       placeholder="https://api.openai.com/v1">
+                            </div>
+                            <div class="form-group" style="flex: 1;">
+                                <label class="form-label">模型名称</label>
+                                <input type="text" class="form-control" id="embeddingModel"
+                                       placeholder="text-embedding-v3">
+                            </div>
+                        </div>
+                        <div class="form-actions">
+                            <button type="button" class="btn btn-outline" onclick="testConnection('embedding')">
+                                🔌 测试连接
+                            </button>
+                            <button type="submit" class="btn btn-primary">保存配置</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- 操作按钮 -->
+            <div class="card">
+                <div class="card-body" style="text-align: center;">
+                    <button class="btn btn-danger" onclick="resetToDefault()">
+                        🔄 恢复为系统默认配置
+                    </button>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="js/api.js"></script>
+    <script src="js/utils.js"></script>
+    <script>
+        // 检查登录状态
+        if (!checkAuth()) {
+            window.location.href = '/';
+        }
+
+        // 页面加载时获取配置
+        document.addEventListener('DOMContentLoaded', async () => {
+            await loadConfig();
+        });
+
+        // 加载用户 AI 配置
+        async function loadConfig() {
+            try {
+                const result = await api.getUserAIConfig();
+                if (result.code === 200) {
+                    const config = result.data;
+
+                    // 填充表单（隐藏 API Key 的中间部分）
+                    document.getElementById('chatApiKey').value = config.ai_api_key || '';
+                    document.getElementById('chatApiUrl').value = config.ai_api_url || '';
+                    document.getElementById('chatModel').value = config.ai_model || '';
+
+                    document.getElementById('visionApiKey').value = config.vision_api_key || '';
+                    document.getElementById('visionApiUrl').value = config.vision_api_url || '';
+                    document.getElementById('visionModel').value = config.vision_model || '';
+
+                    document.getElementById('embeddingApiKey').value = config.embedding_api_key || '';
+                    document.getElementById('embeddingApiUrl').value = config.embedding_api_url || '';
+                    document.getElementById('embeddingModel').value = config.embedding_model || '';
+
+                    // 更新状态徽章
+                    updateStatusBadges(config.has_custom_config);
+                }
+            } catch (error) {
+                showToast('加载配置失败: ' + error.message, 'error');
+            }
+        }
+
+        // 更新状态徽章
+        function updateStatusBadges(hasCustomConfig) {
+            const badges = ['chatModelStatus', 'visionModelStatus', 'embeddingModelStatus'];
+            badges.forEach(id => {
+                const badge = document.getElementById(id);
+                if (hasCustomConfig) {
+                    badge.textContent = '已配置';
+                    badge.style.background = 'var(--success-light)';
+                    badge.style.color = 'var(--success)';
+                } else {
+                    badge.textContent = '未配置';
+                    badge.style.background = 'var(--bg-light)';
+                    badge.style.color = 'var(--text-light)';
+                }
+            });
+        }
+
+        // 保存对话模型配置
+        document.getElementById('chatModelForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            await saveConfig({
+                ai_api_key: document.getElementById('chatApiKey').value,
+                ai_api_url: document.getElementById('chatApiUrl').value,
+                ai_model: document.getElementById('chatModel').value
+            });
+        });
+
+        // 保存视觉模型配置
+        document.getElementById('visionModelForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            await saveConfig({
+                vision_api_key: document.getElementById('visionApiKey').value,
+                vision_api_url: document.getElementById('visionApiUrl').value,
+                vision_model: document.getElementById('visionModel').value
+            });
+        });
+
+        // 保存嵌入模型配置
+        document.getElementById('embeddingModelForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            await saveConfig({
+                embedding_api_key: document.getElementById('embeddingApiKey').value,
+                embedding_api_url: document.getElementById('embeddingApiUrl').value,
+                embedding_model: document.getElementById('embeddingModel').value
+            });
+        });
+
+        // 保存配置
+        async function saveConfig(data) {
+            try {
+                const result = await api.updateUserAIConfig(data);
+                if (result.code === 200) {
+                    showToast(result.msg || '保存成功', 'success');
+                    await loadConfig(); // 重新加载以更新状态
+                } else {
+                    showToast(result.msg || '保存失败', 'error');
+                }
+            } catch (error) {
+                showToast('保存失败: ' + error.message, 'error');
+            }
+        }
+
+        // 测试连接
+        async function testConnection(type) {
+            const typeNames = {
+                'chat': '对话模型',
+                'vision': '视觉模型',
+                'embedding': '嵌入模型'
+            };
+
+            try {
+                showToast(`正在测试${typeNames[type]}连接...`, 'info');
+                const result = await api.testAIConfig(type);
+                if (result.code === 200) {
+                    showToast(result.msg || '连接成功', 'success');
+                } else {
+                    showToast(result.msg || '连接失败', 'error');
+                }
+            } catch (error) {
+                showToast('测试失败: ' + error.message, 'error');
+            }
+        }
+
+        // 恢复默认配置
+        async function resetToDefault() {
+            if (!confirm('确定要恢复为系统默认配置吗？您自定义的 API Key 将被清除。')) {
+                return;
+            }
+
+            try {
+                const result = await api.deleteUserAIConfig();
+                if (result.code === 200) {
+                    showToast('已恢复为系统默认配置', 'success');
+                    await loadConfig();
+                } else {
+                    showToast(result.msg || '操作失败', 'error');
+                }
+            } catch (error) {
+                showToast('操作失败: ' + error.message, 'error');
+            }
+        }
+
+        // 退出登录
+        function logout() {
+            api.removeToken();
+            api.removeUser();
+            window.location.href = '/';
+        }
+    </script>
+</body>
+</html>

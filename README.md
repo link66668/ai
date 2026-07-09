@@ -1,6 +1,6 @@
 # 课程学习助手Agent平台
 
-一个面向大学生的智能课程学习助手平台，基于 **Python Flask + MySQL + HTML/JS** 构建。平台提供课程管理、资料管理、AI对话答疑、学习任务管理、学习计划生成等功能，帮助学生高效管理课程资源、提升学习效率。
+一个面向大学生的智能课程学习助手平台，基于 **Python Flask + SQLite + HTML/JS** 构建。平台提供课程管理、资料管理、AI对话答疑、学习任务管理、学习计划生成等功能，帮助学生高效管理课程资源、提升学习效率。
 
 ## 功能特性
 
@@ -10,80 +10,35 @@
 - **Agent对话**：绑定课程知识库，AI课程答疑，对话上下文留存，课程隔离
 - **学习计划**：录入目标、考试日期、每日学习时长，AI自动生成阶段性学习日程
 - **个人中心**：账号管理、数据统计、数据备份导出
+- **AI模型配置**：每个用户可独立配置自己的 API Key（对话/视觉/嵌入模型），优先级高于全局配置
 
 ### 高级功能
 - **资料来源溯源**：AI回答自动标注参考文档，可追溯原始资料
 - **知识点提取**：自动提取课件、笔记中的关键知识点
 - **任务分解**：长周期任务自动拆解为周/日子任务
 - **全文检索**：按关键词、课程、文件类型检索学习资料
+- **RAG文档处理**：支持 PDF/Word/PPT/Excel 等多种格式的文档解析与向量化
 
 ## 技术栈
 
 | 层级 | 技术 |
 |------|------|
-| 前端 | HTML5 + CSS3 + JavaScript (原生) |
-| 后端 | Python 3.10+ / Flask |
-| 数据库 | MySQL 8.0+ |
-| 认证 | JWT (PyJWT) |
-| 密码加密 | bcrypt |
+| 前端 | HTML5 + CSS3 + JavaScript (原生，无框架) |
+| 后端 | Python 3.10+ / Flask 3.0 |
+| 数据库 | SQLite (文件型数据库) |
+| 认证 | JWT (PyJWT) + bcrypt 密码加密 |
 | 文件存储 | 本地文件系统 |
-| AI服务 | 模拟API（可替换为真实大模型） |
-
-## 项目结构
-
-```
-xm/
-├── backend/                    # 后端代码
-│   ├── app.py                  # Flask主应用入口
-│   ├── config.py               # 配置文件
-│   ├── database.py             # 数据库连接
-│   ├── requirements.txt        # Python依赖
-│   ├── models/                 # 数据模型层
-│   │   ├── user.py             # 用户模型
-│   │   ├── course.py           # 课程模型
-│   │   ├── document.py         # 资料模型
-│   │   ├── chat.py             # 对话模型
-│   │   └── task.py             # 任务/计划模型
-│   ├── routes/                 # API路由层
-│   │   ├── auth.py             # 认证接口
-│   │   ├── course.py           # 课程接口
-│   │   ├── document.py         # 资料接口
-│   │   ├── chat.py             # 对话接口
-│   │   ├── task.py             # 任务接口
-│   │   ├── plan.py             # 计划接口
-│   │   ├── agent.py            # Agent接口
-│   │   └── utils.py            # 工具函数(JWT装饰器等)
-│   ├── services/               # 业务逻辑层
-│   │   ├── ai_service.py       # AI模拟服务
-│   │   └── search_service.py   # 检索服务
-│   └── uploads/                # 上传文件存储
-├── frontend/                   # 前端代码
-│   ├── index.html              # 登录/注册页
-│   ├── dashboard.html          # 仪表盘
-│   ├── courses.html            # 课程管理
-│   ├── course_detail.html      # 课程详情
-│   ├── chat.html               # Agent对话
-│   ├── tasks.html              # 任务管理
-│   ├── plan.html               # 学习计划
-│   ├── profile.html            # 个人中心
-│   ├── css/
-│   │   └── style.css           # 全局样式
-│   └── js/
-│       ├── api.js              # API封装
-│       └── utils.js            # 工具函数
-├── database/
-│   └── init.sql                # 数据库初始化脚本
-├── PROJECT_PLAN.md             # 项目规划文档
-└── README.md                   # 本文件
-```
+| AI服务 | DeepSeek API（支持 Mock/真实双模式） |
+| 文档处理 | PyMuPDF · python-docx · python-pptx · EasyOCR |
+| 检索增强 | BM25 · 向量嵌入 (OpenAI 兼容 API) |
 
 ## 快速开始
 
 ### 方式一：一键启动（Windows）
 
-1. **初始化数据库**：双击运行 `init_db.bat`，输入MySQL root密码
-2. **启动项目**：双击运行 `start.bat`
-3. 浏览器打开 `http://localhost:5000`
+1. **安装依赖并启动**：双击运行 `start.bat`
+2. 浏览器打开 `http://localhost:5000`
+3. 使用演示账号登录：`demo / 123456`
 
 ### 方式二：手动启动
 
@@ -91,53 +46,40 @@ xm/
 
 确保已安装：
 - Python 3.10+
-- MySQL 8.0+
 - pip
 
-#### 2. 初始化数据库
-
-```bash
-# 登录MySQL
-mysql -u root -p
-
-# 执行初始化脚本
-source database/init.sql
-```
-
-或在MySQL客户端中执行：
-```sql
-source /path/to/xm/database/init.sql;
-```
-
-#### 3. 安装后端依赖
+#### 2. 安装后端依赖
 
 ```bash
 cd backend
 pip install -r requirements.txt
 ```
 
-### 4. 配置数据库连接
+#### 3. 配置环境变量
 
-编辑 `backend/config.py`，修改数据库连接信息：
+在 `backend/` 目录下创建 `.env` 文件：
 
-```python
-MYSQL_HOST = 'localhost'
-MYSQL_PORT = 3306
-MYSQL_USER = 'root'
-MYSQL_PASSWORD = '你的MySQL密码'
-MYSQL_DB = 'course_agent_platform'
+```env
+# 必需配置
+SECRET_KEY=your-random-secret-key-change-in-production
+
+# AI服务配置（可选，不配置则使用 Mock 模式）
+AI_API_KEY=sk-your-api-key
+AI_API_URL=https://api.deepseek.com
+AI_MODEL=deepseek-chat
+
+# 视觉模型配置（可选）
+VISION_API_KEY=sk-your-vision-key
+VISION_API_URL=https://your-vision-api.com
+VISION_MODEL=qwen-vl-max
+
+# 嵌入模型配置（可选）
+EMBEDDING_API_KEY=sk-your-embedding-key
+EMBEDDING_API_URL=https://your-embedding-api.com
+EMBEDDING_MODEL=text-embedding-v3
 ```
 
-或通过环境变量配置：
-```bash
-export MYSQL_HOST=localhost
-export MYSQL_PORT=3306
-export MYSQL_USER=root
-export MYSQL_PASSWORD=your_password
-export MYSQL_DB=course_agent_platform
-```
-
-### 5. 启动后端服务
+#### 4. 启动后端服务
 
 ```bash
 cd backend
@@ -146,16 +88,89 @@ python app.py
 
 服务默认运行在 `http://localhost:5000`
 
-### 6. 访问前端
-
-浏览器打开 `http://localhost:5000`
-
 ### 测试账号
 
 - 用户名：`demo`
 - 密码：`123456`
 
 （也可注册新账号）
+
+## 用户 AI 模型配置
+
+### 功能说明
+
+每个用户可以配置自己的 AI 模型 API Key，独立于全局配置。配置优先级：
+
+```
+用户配置 > 全局配置 (.env 文件)
+```
+
+### 配置方式
+
+1. 登录后点击左侧导航栏的 **🔧 AI 模型配置**
+2. 填写对应模型的 API Key、API 地址、模型名称
+3. 点击"测试连接"验证配置有效性
+4. 点击"保存配置"完成设置
+
+### 降级策略
+
+- 用户未配置 → 使用 `.env` 中的全局配置
+- 用户部分配置 → 已配置的字段用用户的，未配置的字段用全局的
+- 用户删除配置 → 回退到全局配置
+
+## 项目结构
+
+```
+ai/
+├── backend/                    # 后端代码
+│   ├── app.py                  # Flask主应用入口
+│   ├── config.py               # 全局配置
+│   ├── database.py             # 数据库连接与表创建
+│   ├── requirements.txt        # Python依赖
+│   ├── models/                 # 数据模型层
+│   │   ├── user.py             #   用户模型
+│   │   ├── course.py           #   课程模型
+│   │   ├── document.py         #   文档模型
+│   │   ├── chat.py             #   对话/消息模型
+│   │   ├── task.py             #   任务/计划模型
+│   │   └── user_ai_config.py   #   用户AI配置模型
+│   ├── routes/                 # API路由层
+│   │   ├── auth.py             #   认证接口
+│   │   ├── course.py           #   课程接口
+│   │   ├── document.py         #   资料接口
+│   │   ├── chat.py             #   对话接口
+│   │   ├── task.py             #   任务接口
+│   │   ├── plan.py             #   计划接口
+│   │   ├── agent.py            #   Agent接口
+│   │   ├── user_ai_config.py   #   用户AI配置接口
+│   │   └── utils.py            #   工具函数(JWT装饰器等)
+│   ├── services/               # 业务逻辑层
+│   │   ├── ai_service.py       #   AI服务(对话/摘要/计划生成)
+│   │   ├── search_service.py   #   文档全文搜索
+│   │   ├── user_context.py     #   用户上下文管理
+│   │   ├── streaming_service.py #  SSE流式输出
+│   │   ├── vision_service.py   #   视觉模型调用
+│   │   ── embedding_service.py #  嵌入模型调用
+│   └── uploads/                # 上传文件存储
+├── frontend/                   # 前端代码
+│   ├── index.html              # 登录/注册页
+│   ├── dashboard.html          # 仪表盘
+│   ├── courses.html            # 课程管理
+│   ├── course_detail.html      # 课程详情
+│   ├── chat.html               # AI对话
+│   ├── tasks.html              # 任务管理
+│   ├── plan.html               # 学习计划
+│   ├── profile.html            # 个人中心
+│   ├── ai_settings.html        # AI模型配置
+│   ├── css/
+│   │   ── style.css           # 全局样式
+│   └── js/
+│       ├── api.js              # API封装
+│       └── utils.js            # 工具函数
+├── CLAUDE.md                   # AI上下文文档
+├── PROJECT_PLAN.md             # 项目规划文档
+└── README.md                   # 本文件
+```
 
 ## API接口文档
 
@@ -234,9 +249,18 @@ python app.py
 | POST | /generate-plan | 生成学习计划 |
 | POST | /decompose-task | 任务分解 |
 
+### 用户AI配置模块 `/api/user/ai-config`
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | / | 获取当前用户的AI配置 |
+| PUT | / | 更新当前用户的AI配置 |
+| POST | /test | 测试AI配置连接 |
+| DELETE | / | 删除用户配置(恢复默认) |
+
 ## 数据库设计
 
-共7张数据表：
+共 8 张数据表：
 
 | 表名 | 说明 |
 |------|------|
@@ -247,8 +271,9 @@ python app.py
 | messages | 消息表 |
 | tasks | 学习任务表 |
 | study_plans | 学习计划表 |
+| user_ai_configs | 用户AI配置表 |
 
-详见 `database/init.sql`。
+数据库文件：`backend/course_agent.db`（首次运行自动创建）
 
 ## 开发说明
 
@@ -269,14 +294,16 @@ python app.py
 
 ### AI服务
 
-当前使用模拟AI接口（`services/ai_service.py`），基于关键词匹配和课程资料生成回答。可替换为真实大模型API（如OpenAI、文心一言等）。
+- **双模式**：`USE_REAL_LLM=true` 调用真实 LLM API；`false` 使用关键词匹配的 Mock 引擎
+- **用户隔离**：每个用户可配置独立的 API Key，优先级高于全局配置
+- **降级链**：RAG 失败 → Mock 检索 → LLM 失败 → 伪流式 → 阻塞 → 最终回退
 
 ## 注意事项
 
-1. 首次运行前需先初始化MySQL数据库
-2. 修改 `config.py` 中的 `SECRET_KEY` 为安全值
+1. 首次运行会自动创建数据库和演示数据
+2. 生产环境请修改 `SECRET_KEY` 为安全值
 3. 上传文件默认存储在 `backend/uploads/` 目录
-4. 文件上传限制：单文件最大10MB
+4. 文件上传限制：单文件最大 200MB
 5. 支持的文件类型：txt, pdf, doc, docx, ppt, pptx, xls, xlsx, png, jpg, gif
 
 ## 团队

@@ -55,20 +55,29 @@ class EmbeddingService:
         通过 OpenAI 兼容 Embeddings API 向量化
         """
         from openai import OpenAI
+        from models.user_ai_config import UserAIConfig
+        from services.user_context import get_current_user_id
 
-        if self._client is None:
-            self._client = OpenAI(
-                base_url=Config.EMBEDDING_API_URL,
-                api_key=Config.EMBEDDING_API_KEY,
-                timeout=30.0,
-            )
-            logger.info(
-                f"[Embedding] API 客户端已初始化: {Config.EMBEDDING_API_URL} "
-                f"model={Config.EMBEDDING_MODEL}"
-            )
+        # 获取用户配置
+        user_id = get_current_user_id()
+        if user_id:
+            config = UserAIConfig.get_effective_config(user_id)
+        else:
+            config = {
+                'embedding_api_key': Config.EMBEDDING_API_KEY,
+                'embedding_api_url': Config.EMBEDDING_API_URL,
+                'embedding_model': Config.EMBEDDING_MODEL,
+            }
 
-        response = self._client.embeddings.create(
-            model=Config.EMBEDDING_MODEL,
+        # 每次调用都创建新客户端以支持用户配置
+        client = OpenAI(
+            base_url=config['embedding_api_url'],
+            api_key=config['embedding_api_key'],
+            timeout=30.0,
+        )
+
+        response = client.embeddings.create(
+            model=config['embedding_model'],
             input=texts,
         )
         embeddings = [item.embedding for item in response.data]
