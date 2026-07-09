@@ -40,35 +40,23 @@ class RetrievalService:
 
     def hybrid_search(self, course_id, query, top_k=10, metadata_filter=None, ai_config=None):
         """
-        混合检索：向量 + BM25 → RRF 融合
+        关键词检索（BM25）
 
         Args:
             course_id: 课程 ID
             query: 查询文本
             top_k: 返回结果数
-            metadata_filter: 元数据过滤条件
-            ai_config: 用户AI配置 dict（可选）
+            metadata_filter: 元数据过滤条件（保留接口，当前未使用）
+            ai_config: 用户AI配置 dict（可选，保留接口）
 
         Returns:
-            list[dict]: 排序后的检索结果
+            list[dict]: 检索结果
         """
-        from services.embedding_service import embedding_service
-        from services.vector_store import vector_store
         from services.bm25_manager import bm25_manager
 
-        # 1. 向量检索
-        query_embedding = embedding_service.embed_query(query, ai_config=ai_config)
-        vector_results = vector_store.search(
-            course_id, query_embedding, top_k=top_k * 2,
-            metadata_filter=metadata_filter
-        )
-
-        # 2. BM25 检索
-        bm25_results = bm25_manager.search(course_id, query, top_k=top_k * 2)
-
-        # 3. RRF 融合
-        fused = self._rrf_fusion(vector_results, bm25_results, top_k)
-        return fused
+        # BM25 关键词检索
+        results = bm25_manager.search(course_id, query, top_k=top_k)
+        return results
 
     def _rrf_fusion(self, vector_results, bm25_results, top_k):
         """
