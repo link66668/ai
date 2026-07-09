@@ -1182,6 +1182,11 @@ class AIService:
         except Exception as e:
             print(f"[RAG] 管线初始化失败，回退到原始 chat(): {e}")
             # 最终回退
+            if stream:
+                # 流模式需返回生成器，用伪流式包装 mock 结果
+                from services.streaming_service import streaming_service
+                mock_result = self.chat(message, course_id, conversation_history)
+                return streaming_service.pseudo_stream(mock_result['response'])
             return self.chat(message, course_id, conversation_history)
 
     @staticmethod

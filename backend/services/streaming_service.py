@@ -37,6 +37,7 @@ class StreamingService:
         """检查是否已中断"""
         return conversation_id in _interrupted_conversations
 
+    @staticmethod
     def _normalize_base_url(url: str) -> str:
         """去掉 URL 末尾的 /v1，OpenAI SDK 会自动追加"""
         url = url.rstrip('/')
