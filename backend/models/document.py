@@ -68,3 +68,36 @@ class Document:
         sql = "SELECT COUNT(*) as count FROM documents WHERE course_id = ?"
         result = db.fetch_one(sql, (course_id,))
         return result['count'] if result else 0
+
+    # ========== 异步处理管线新增方法 ==========
+
+    @staticmethod
+    def update_processing(doc_id, **kwargs):
+        """更新文档处理状态字段"""
+        allowed = {'processing_status', 'processing_progress', 'processing_error',
+                   'page_count', 'chunk_count', 'structured_content', 'toc_tree', 'metadata_json',
+                   'content_text'}
+        updates = {k: v for k, v in kwargs.items() if k in allowed}
+        if not updates:
+            return
+
+        set_clause = ', '.join(f"{k} = ?" for k in updates)
+        values = list(updates.values()) + [doc_id]
+        sql = f"UPDATE documents SET {set_clause} WHERE id = ?"
+        return db.update(sql, values)
+
+    @staticmethod
+    def find_processing_by_id(doc_id):
+        """查询文档处理状态（轻量查询，仅处理相关字段）"""
+        sql = """SELECT id, processing_status, processing_progress, processing_error,
+                        page_count, chunk_count, file_type, original_name
+                 FROM documents WHERE id = ?"""
+        return db.fetch_one(sql, (doc_id,))
+
+    @staticmethod
+    def get_chunks(doc_id):
+        """获取文档的所有分块"""
+        sql = """SELECT * FROM document_chunks
+                 WHERE document_id = ?
+                 ORDER BY chunk_index"""
+        return db.fetch_all(sql, (doc_id,))

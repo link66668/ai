@@ -96,6 +96,13 @@ def upload_document(current_user):
         content_text=content_text
     )
 
+    # 触发异步处理管线（所有格式都走管线，包括 txt）
+    try:
+        from services.async_pipeline import pipeline
+        pipeline.process_document(doc_id)
+    except Exception as e:
+        print(f"[Document] 触发处理管线失败: {e}")
+
     return success_response({'id': doc_id}, '上传成功')
 
 @document_bp.route('/<int:doc_id>', methods=['GET'])
@@ -181,3 +188,63 @@ def search_documents(current_user):
         r['created_at'] = str(r['created_at'])
 
     return success_response(results)
+
+
+# ========== 异步处理管线端点 ==========
+
+@document_bp.route('/<int:doc_id>/processing', methods=['GET'])
+@token_required
+def get_processing_status(current_user, doc_id):
+    """查询文档处理进度"""
+    doc = Document.find_by_id(doc_id)
+    if not doc:
+        return error_response('资料不存在', 404)
+
+    # 检查权限
+    course = Course.find_by_id(doc['course_id'])
+    if not course or course['user_id'] != current_user['id']:
+        return error_response('无权访问', 403)
+
+    from services.async_pipeline import pipeline
+    progress = pipeline.get_progress(doc_id)
+    return success_response(progress)
+
+
+@document_bp.route('/<int:doc_id>/reprocess', methods=['POST'])
+@token_required
+def reprocess_document(current_user, doc_id):
+    """重新处理文档"""
+    doc = Document.find_by_id(doc_id)
+    if not doc:
+        return error_response('资料不存在', 404)
+
+    # 检查权限
+    course = Course.find_by_id(doc['course_id'])
+    if not course or course['user_id'] != current_user['id']:
+        return error_response('无权访问', 403)
+
+    from services.async_pipeline import pipeline
+    try:
+        pipeline.reprocess_document(doc_id)
+        return success_response(msg='已提交重新处理')
+    except Exception as e:
+        return error_response(f'重新处理失败: {str(e)}', 500)
+
+
+@document_bp.route('/<int:doc_id>/chunks', methods=['GET'])
+@token_required
+def get_document_chunks(current_user, doc_id):
+    """查看文档分块"""
+    doc = Document.find_by_id(doc_id)
+    if not doc:
+        return error_response('资料不存在', 404)
+
+    # 检查权限
+    course = Course.find_by_id(doc['course_id'])
+    if not course or course['user_id'] != current_user['id']:
+        return error_response('无权访问', 403)
+
+    chunks = Document.get_chunks(doc_id)
+    for c in chunks:
+        c['created_at'] = str(c['created_at'])
+    return success_response(chunks)

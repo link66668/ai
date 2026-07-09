@@ -152,24 +152,115 @@ function throttle(fn, delay = 300) {
     };
 }
 
-// Markdown简易渲染（用于AI回答）
+// Markdown增强渲染（用于AI回答）
 function renderMarkdown(text) {
     if (!text) return '';
 
-    // 转义HTML
-    let html = text
+    let html = text;
+
+    // 1. 先保护代码块（避免内部内容被后续正则处理）
+    const codeBlocks = [];
+    html = html.replace(/```(\w*)\n?([\s\S]*?)```/g, (match, lang, code) => {
+        const idx = codeBlocks.length;
+        codeBlocks.push({ lang, code: code.trim() });
+        return `%%CODEBLOCK_${idx}%%`;
+    });
+
+    // 2. 保护行内代码
+    const inlineCodes = [];
+    html = html.replace(/`([^`]+)`/g, (match, code) => {
+        const idx = inlineCodes.length;
+        inlineCodes.push(code);
+        return `%%INLINECODE_${idx}%%`;
+    });
+
+    // 3. 转义HTML
+    html = html
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;');
 
-    // 粗体
-    html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+    // 4. 表格
+    html = html.replace(/(\|[^\n]+\|\n\|[\s\-:\|]+\|\n(?:\|[^\n]+\|\n?)*)/g, (match) => {
+        const lines = match.trim().split('\n');
+        if (lines.length < 2) return match;
 
-    // 斜体
-    html = html.replace(/\*(.*?)\*/g, '<em>$1</em>');
+        let tableHtml = '<table>';
+        // 表头
+        const headers = lines[0].split('|').filter(c => c.trim());
+        tableHtml += '<thead><tr>' + headers.map(h => `<th>${h.trim()}</th>`).join('') + '</tr></thead>';
 
-    // 换行
+        // 数据行（跳过分隔行）
+        tableHtml += '<tbody>';
+        for (let i = 2; i < lines.length; i++) {
+            const cells = lines[i].split('|').filter(c => c.trim());
+            if (cells.length > 0) {
+                tableHtml += '<tr>' + cells.map(c => `<td>${c.trim()}</td>`).join('') + '</tr>';
+            }
+        }
+        tableHtml += '</tbody></table>';
+        return tableHtml;
+    });
+
+    // 5. 标题
+    html = html.replace(/^#### (.+)$/gm, '<h4>$1</h4>');
+    html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
+    html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
+    html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>');
+
+    // 6. 引用块
+    html = html.replace(/^&gt; (.+)$/gm, '<blockquote>$1</blockquote>');
+    // 合并连续引用块
+    html = html.replace(/<\/blockquote>\n<blockquote>/g, '<br>');
+
+    // 7. 分割线
+    html = html.replace(/^(---|\*\*\*)$/gm, '<hr>');
+
+    // 8. 无序列表
+    html = html.replace(/^[\-\*] (.+)$/gm, '<li>$1</li>');
+    // 将连续li包裹在ul中
+    html = html.replace(/((?:<li>[^<]*<\/li>\n?)+)/g, '<ul>$1</ul>');
+
+    // 9. 有序列表
+    html = html.replace(/^\d+\. (.+)$/gm, '<li>$1</li>');
+    // 注意：有序列表和无序列表都用li标记，这里简化处理，统一用ul
+
+    // 10. 链接
+    html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>');
+
+    // 11. 图片
+    html = html.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1">');
+
+    // 12. 引用标记 [1], [2] → 可点击上标
+    html = html.replace(/\[(\d+)\]/g, '<sup class="citation" data-cite="$1">[$1]</sup>');
+
+    // 13. 临时文件标记
+    html = html.replace(/\(临时文件\)/g, '<span class="temp-file-badge">临时文件</span>');
+
+    // 14. 粗体
+    html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+
+    // 15. 斜体
+    html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
+
+    // 16. 还原行内代码
+    html = html.replace(/%%INLINECODE_(\d+)%%/g, (match, idx) => {
+        return '<code>' + inlineCodes[parseInt(idx)] + '</code>';
+    });
+
+    // 17. 还原代码块
+    html = html.replace(/%%CODEBLOCK_(\d+)%%/g, (match, idx) => {
+        const block = codeBlocks[parseInt(idx)];
+        const langLabel = block.lang ? `<span class="code-lang">${block.lang}</span>` : '';
+        return `<pre>${langLabel}<code>${block.code}</code></pre>`;
+    });
+
+    // 18. 换行（放在最后，避免影响块级元素）
     html = html.replace(/\n/g, '<br>');
+
+    // 19. 清理空ul
+    html = html.replace(/<ul>\s*<\/ul>/g, '');
+    html = html.replace(/<ul>\s*<br>\s*<\/ul>/g, '');
 
     return html;
 }

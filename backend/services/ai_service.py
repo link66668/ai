@@ -1058,6 +1058,121 @@ class AIService:
             print(f"[LLM] Multi-course parse error: {e}")
             return None
 
+    # ========== RAG + 流式对话 ==========
+
+    def chat_rag(self, message, course_id=None, conversation_history=None,
+                 temp_file_session_id=None, stream=False):
+        """
+        RAG 增强对话（替代 chat() 的新引擎）
+
+        Args:
+            message: 用户消息
+            course_id: 课程 ID（可选，用于检索知识库）
+            conversation_history: 对话历史
+            temp_file_session_id: 临时文件会话 ID
+            stream: 是否流式输出（返回生成器）
+
+        Returns:
+            非流式: {'response': str, 'references': list}
+            流式: Generator yielding SSE strings
+
+        降级链:
+            RAG 失败 → mock 检索 → LLM 调用失败 → 伪流式 → 阻塞 → 最终回退 chat()
+        """
+        from services.retrieval_service import RetrievalService
+        from services.temp_file_service import temp_file_manager
+
+        try:
+            retrieval = RetrievalService()
+
+            # 1. 获取临时文件上下文（等待最多 30 秒让异步处理完成）
+            temp_text = ''
+            if temp_file_session_id:
+                try:
+                    temp_text = temp_file_manager.get_context(
+                        temp_file_session_id, wait_timeout=30
+                    )
+                except Exception as e:
+                    print(f"[RAG] 获取临时文件失败: {e}")
+
+            # 2. 构建 RAG 上下文
+            rag_result = retrieval.build_rag_context(
+                course_id=course_id,
+                query=message,
+                temp_file_text=temp_text,
+                conversation_history=conversation_history,
+            )
+
+            if stream:
+                # 流式模式：返回 SSE 生成器
+                from services.streaming_service import streaming_service
+
+                def stream_generator():
+                    nonlocal rag_result
+                    try:
+                        for event in streaming_service.stream_chat(
+                            rag_result['messages'],
+                            conversation_id=None,
+                        ):
+                            yield event
+                    except Exception as e:
+                        # 流式失败 → 降级到阻塞 + 伪流式
+                        print(f"[RAG] 流式调用失败，降级到阻塞模式: {e}")
+                        try:
+                            response_text = streaming_service.blocking_chat(
+                                rag_result['messages']
+                            )
+                            for event in streaming_service.pseudo_stream(response_text):
+                                yield event
+                        except Exception as e2:
+                            # 最终回退到 mock
+                            print(f"[RAG] LLM 调用失败，回退到 mock 模式: {e2}")
+                            mock_result = self.chat(message, course_id, conversation_history)
+                            for event in streaming_service.pseudo_stream(
+                                mock_result['response']
+                            ):
+                                yield event
+
+                return stream_generator()
+            else:
+                # 阻塞模式
+                try:
+                    from services.streaming_service import streaming_service
+                    response_text = streaming_service.blocking_chat(
+                        rag_result['messages']
+                    )
+                    return {
+                        'response': response_text,
+                        'references': rag_result.get('citations', []),
+                    }
+                except Exception as e:
+                    print(f"[RAG] LLM 阻塞调用失败，回退到 mock 模式: {e}")
+                    # 回退到原始 chat()
+                    return self.chat(message, course_id, conversation_history)
+
+        except Exception as e:
+            print(f"[RAG] 管线初始化失败，回退到原始 chat(): {e}")
+            # 最终回退
+            return self.chat(message, course_id, conversation_history)
+
+    @staticmethod
+    def _build_citation_markdown(citations):
+        """构建引用说明的 Markdown 文本"""
+        if not citations:
+            return ''
+
+        lines = ['\n\n---\n**参考资料：**\n']
+        for cite in citations:
+            if cite.get('source') == 'temp_file':
+                lines.append(f"- *(临时文件)* {cite.get('note', '来自对话上传的文件')}")
+            else:
+                num = cite.get('num', '?')
+                heading = cite.get('heading_path', '')
+                location = f" ({heading})" if heading else ''
+                lines.append(f"- [{num}]{location}")
+
+        return '\n'.join(lines)
+
 
 # 创建全局AI服务实例
 ai_service = AIService()

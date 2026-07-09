@@ -57,3 +57,4 @@ desktop.ini
 # ===== 其他 =====
 instance/
 *.out
+backend/.model_cache/

@@ -279,6 +279,136 @@ class ApiClient {
     agentExtractKnowledge(text) {
         return this.post('/agent/extract-knowledge', { text });
     }
+
+    // ========== 流式 + 临时文件 + 中断 ==========
+
+    /**
+     * SSE 流式消息发送
+     * @param {number} convId - 对话ID
+     * @param {string} content - 消息内容
+     * @param {string} tempFileSessionId - 临时文件会话ID（可选）
+     * @param {function} onChunk - 每收到一个token的回调 (delta, fullText)
+     * @param {function} onDone - 流结束回调 (fullText, citations)
+     * @param {function} onError - 错误回调 (error)
+     * @returns {AbortController} 用于中断的控制器
+     */
+    streamMessage(convId, content, tempFileSessionId, onChunk, onDone, onError) {
+        const token = this.getToken();
+        const controller = new AbortController();
+
+        fetch(`${this.baseURL}/conversations/${convId}/messages/stream`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({
+                content: content,
+                temp_file_session_id: tempFileSessionId
+            }),
+            signal: controller.signal
+        }).then(async (response) => {
+            if (!response.ok) {
+                const text = await response.text();
+                throw new Error(text || '流式请求失败');
+            }
+
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '';
+            let fullText = '';
+            let citations = [];
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                buffer += decoder.decode(value, { stream: true });
+
+                // 解析 SSE 事件
+                const lines = buffer.split('\n\n');
+                buffer = lines.pop(); // 保留未完成的部分
+
+                for (const line of lines) {
+                    if (line.startsWith('data: ')) {
+                        try {
+                            const data = JSON.parse(line.slice(6));
+                            if (data.done) {
+                                if (data.interrupted) {
+                                    onDone(fullText, citations, true);
+                                    return;
+                                }
+                                citations = data.citations || [];
+                                // 如果有完整响应，确保已显示
+                                if (data.full_response) {
+                                    fullText = data.full_response;
+                                }
+                                onDone(fullText, citations, false);
+                                return;
+                            } else if (data.content) {
+                                fullText += data.content;
+                                onChunk(data.content, fullText);
+                            }
+                        } catch (e) {
+                            // 跳过解析失败的行
+                        }
+                    }
+                }
+            }
+            // 流正常结束但没有 done 标记
+            onDone(fullText, citations, false);
+        }).catch((err) => {
+            if (err.name === 'AbortError') {
+                onDone('', [], true);
+            } else {
+                onError(err);
+            }
+        });
+
+        return controller;
+    }
+
+    /**
+     * 上传临时文件到对话（后端异步处理，立即返回）
+     */
+    async uploadTempFile(convId, file) {
+        const formData = new FormData();
+        formData.append('file', file);
+        // 注意：不能用 keepalive，因为文件可能超过 64KB 限制
+        // 改为后端异步处理：上传立即返回，后台线程解析/OCR
+        return this.request(`/conversations/${convId}/upload-temp`, {
+            method: 'POST',
+            body: formData,
+        });
+    }
+
+    /**
+     * 查询临时文件处理状态
+     */
+    async getTempFileStatus(convId, fileId) {
+        return this.get(`/conversations/${convId}/temp-file-status/${fileId}`);
+    }
+
+    /**
+     * 中断流式生成
+     */
+    async interruptStream(convId) {
+        return this.post(`/conversations/${convId}/interrupt`);
+    }
+
+    /**
+     * 查询文档处理进度
+     */
+    async getDocumentProcessing(docId) {
+        return this.get(`/documents/${docId}/processing`);
+    }
+
+    /**
+     * 重新处理文档
+     */
+    async reprocessDocument(docId) {
+        return this.post(`/documents/${docId}/reprocess`);
+    }
 }
 
 const api = new ApiClient();

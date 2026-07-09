@@ -16,3 +16,38 @@ python-multipart==0.0.6
 
 # 其他工具
 python-dotenv==1.0.0
+
+# ========== 全格式文档引擎 + RAG 新增依赖 ==========
+
+# 文档解析
+PyMuPDF>=1.23.8            # PDF解析（需要 >=1.24.0 支持 Python 3.13）
+python-docx>=1.1.0         # Word解析
+python-pptx>=0.6.23        # PPT解析
+openpyxl>=3.1.2            # Excel解析
+Pillow>=10.2.0             # 图片处理
+markdown>=3.5.2            # Markdown解析
+beautifulsoup4>=4.12.3     # HTML解析
+lxml>=5.1.0                # 快速HTML/XML解析器
+
+# OCR引擎（可选——安装失败不影响核心功能，系统会自动降级）
+# paddlepaddle==3.0.0       # PaddleOCR深度学习框架 (CPU版) — Python 3.13 需手动安装
+# paddleocr==2.9.0          # 中文OCR首选 — Python 3.13 需手动安装
+easyocr>=1.7.2             # OCR降级方案（纯pip，CPU友好）
+
+# AI与嵌入
+openai>=1.12.0             # DeepSeek API + MaaS 嵌入/视觉（OpenAI兼容）
+
+# 向量与检索
+# chromadb>=0.4.24          # 向量数据库 — Python 3.13 需要 chroma-hnswlib 编译环境
+rank-bm25>=0.2.2           # BM25检索
+
+# 安全
+cryptography>=42.0.0       # 临时文件加密
+
+# 注意：
+# 1. tiktoken 需要 Rust 编译器，在 Python 3.13 上可能安装失败
+#    系统已内置字符级 token 计数降级方案，不影响运行
+# 2. chromadb 依赖 chroma-hnswlib (C扩展)，在 Python 3.13 Windows 上可能无预编译包
+#    系统已内置纯 BM25 降级方案，向量检索不可用时自动切换
+# 3. paddlepaddle/paddleocr 在 Python 3.13 上可能安装失败
+#    系统会自动降级到 EasyOCR（已包含在上方）

@@ -65,6 +65,12 @@
 
                 <!-- 聊天区域 -->
                 <div class="chat-main">
+                    <!-- 临时文件栏 -->
+                    <div class="temp-file-bar hidden" id="tempFileBar">
+                        <span class="temp-file-label">📎 临时文件：</span>
+                        <div class="temp-file-list" id="tempFileList"></div>
+                        <button class="btn btn-sm btn-outline" onclick="clearTempFiles()" title="清除所有临时文件">清除</button>
+                    </div>
                     <div class="chat-messages" id="chatMessages">
                         <div class="empty-state">
                             <div class="icon">💬</div>
@@ -73,9 +79,14 @@
                         </div>
                     </div>
                     <div class="chat-input-area">
+                        <label class="btn btn-outline btn-icon" for="tempFileInput" title="上传临时文件（图片/PDF/Word等）">📎</label>
+                        <input type="file" id="tempFileInput" style="display:none"
+                            accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.jpg,.jpeg,.png,.gif"
+                            onchange="handleTempFileUpload(this)">
                         <textarea class="chat-input" id="chatInput" placeholder="输入你的问题..." rows="1"
                             onkeydown="handleInputKey(event)"></textarea>
                         <button class="btn btn-primary" id="sendBtn" onclick="sendMessage()">发送</button>
+                        <button class="btn btn-danger btn-icon hidden" id="stopBtn" onclick="stopStreaming()" title="停止生成">⏹</button>
                     </div>
                 </div>
             </div>
@@ -91,6 +102,11 @@
         let currentConvId = null;
         let conversations = [];
         let courses = [];
+
+        // 流式和临时文件状态
+        let currentStreamController = null;
+        let tempFileSessionId = null;
+        let tempFiles = [];  // [{file_id, filename, file_type, file_size, preview}]
 
         // 加载课程列表
         async function loadCourses() {
@@ -246,11 +262,12 @@
 
             input.value = '';
             const sendBtn = document.getElementById('sendBtn');
-            sendBtn.disabled = true;
+            const stopBtn = document.getElementById('stopBtn');
+            sendBtn.classList.add('hidden');
+            stopBtn.classList.remove('hidden');
 
             // 显示用户消息
             const container = document.getElementById('chatMessages');
-            // 清除空状态
             const empty = container.querySelector('.empty-state');
             if (empty) empty.remove();
 
@@ -264,52 +281,246 @@
                 </div>
             `;
 
-            // 显示加载状态
-            const loadingId = 'loading-' + Date.now();
+            // 创建AI消息气泡（流式更新）
+            const msgId = 'msg-' + Date.now();
             container.innerHTML += `
-                <div class="message assistant" id="${loadingId}">
+                <div class="message assistant" id="${msgId}">
                     <div class="message-avatar">AI</div>
                     <div class="message-content">
-                        <div class="message-bubble">
-                            <div class="spinner" style="width:20px;height:20px;border-width:2px;"></div>
-                        </div>
+                        <div class="message-bubble"><span class="streaming-cursor"></span></div>
+                        <div class="message-references hidden" id="${msgId}-refs"></div>
+                        <div class="message-time">刚刚</div>
                     </div>
                 </div>
             `;
             container.scrollTop = container.scrollHeight;
 
-            try {
-                const result = await api.sendMessage(currentConvId, content);
-                const reply = result.data;
+            const bubble = document.querySelector(`#${msgId} .message-bubble`);
+            const refsEl = document.getElementById(`${msgId}-refs`);
 
-                // 移除加载状态
-                document.getElementById(loadingId)?.remove();
+            // 流式调用
+            currentStreamController = api.streamMessage(
+                currentConvId,
+                content,
+                tempFileSessionId,
+                // onChunk
+                (delta, fullText) => {
+                    bubble.innerHTML = renderMarkdown(fullText) + '<span class="streaming-cursor"></span>';
+                    container.scrollTop = container.scrollHeight;
+                },
+                // onDone
+                (fullText, citations, interrupted) => {
+                    // 移除光标
+                    bubble.innerHTML = renderMarkdown(fullText);
+                    bubble.querySelector('.streaming-cursor')?.remove();
 
-                // 显示AI回复
-                container.innerHTML += `
-                    <div class="message assistant">
-                        <div class="message-avatar">AI</div>
-                        <div class="message-content">
-                            <div class="message-bubble">${renderMarkdown(reply.content)}</div>
-                            ${reply.references && reply.references.length ? `
-                                <div class="message-references">
-                                    📚 参考: ${reply.references.map(r => r.doc_name).join(', ')}
-                                </div>
-                            ` : ''}
-                            <div class="message-time">刚刚</div>
-                        </div>
-                    </div>
-                `;
-                container.scrollTop = container.scrollHeight;
+                    // 显示引用
+                    if (citations && citations.length) {
+                        const courseRefs = citations.filter(c => c.source !== 'temp_file');
+                        const tempRefs = citations.filter(c => c.source === 'temp_file');
+                        let refHtml = '';
+                        if (courseRefs.length) {
+                            refHtml += '📚 课程资料: ' + courseRefs.map(r => `[${r.num}]`).join(' ') + ' ';
+                        }
+                        if (tempRefs.length) {
+                            refHtml += '<span class="temp-file-badge">临时文件</span>';
+                        }
+                        refsEl.innerHTML = refHtml;
+                        refsEl.classList.remove('hidden');
+                    }
 
-                // 更新对话列表标题
-                loadConversations();
-            } catch (error) {
-                document.getElementById(loadingId)?.remove();
-                showToast('发送失败', 'error');
-            } finally {
-                sendBtn.disabled = false;
+                    if (interrupted) {
+                        showToast('生成已停止', 'warning');
+                    }
+
+                    // 恢复按钮状态
+                    sendBtn.classList.remove('hidden');
+                    stopBtn.classList.add('hidden');
+                    currentStreamController = null;
+
+                    // 更新对话列表
+                    loadConversations();
+                },
+                // onError
+                (error) => {
+                    bubble.innerHTML = renderMarkdown('*[AI 服务暂时不可用: ' + error.message + ']*');
+                    bubble.querySelector('.streaming-cursor')?.remove();
+                    sendBtn.classList.remove('hidden');
+                    stopBtn.classList.add('hidden');
+                    currentStreamController = null;
+                    showToast('发送失败: ' + error.message, 'error');
+                }
+            );
+        }
+
+        function stopStreaming() {
+            if (currentStreamController) {
+                currentStreamController.abort();
+                if (currentConvId) {
+                    api.interruptStream(currentConvId).catch(() => {});
+                }
+                currentStreamController = null;
             }
+        }
+
+        // 临时文件处理
+        const MAX_TEMP_FILE_SIZE = 200 * 1024 * 1024; // 200MB
+
+        // ========== 临时文件状态轮询 ==========
+        async function pollTempFileStatus(fileId) {
+            const maxPolls = 120;  // 最多轮询 120 次（10 分钟，每 5 秒一次）
+            let pollCount = 0;
+
+            while (pollCount < maxPolls) {
+                await new Promise(resolve => setTimeout(resolve, 5000));  // 每 5 秒查询一次
+
+                try {
+                    const result = await api.getTempFileStatus(currentConvId, fileId);
+                    const status = result.data.status;
+
+                    if (status === 'done') {
+                        // 更新状态为完成
+                        const idx = tempFiles.findIndex(f => f.file_id === fileId);
+                        if (idx >= 0) {
+                            tempFiles[idx].status = 'done';
+                            tempFiles[idx].preview = result.data.preview || '';
+                        }
+                        renderTempFileBar();
+                        return;
+                    } else if (status === 'error') {
+                        const idx = tempFiles.findIndex(f => f.file_id === fileId);
+                        if (idx >= 0) {
+                            tempFiles[idx].status = 'error';
+                        }
+                        renderTempFileBar();
+                        return;
+                    }
+                    // status === 'processing' → 继续轮询
+                } catch (e) {
+                    // 网络错误时继续重试
+                }
+
+                pollCount++;
+            }
+
+            // 超时：标记为完成（后端可能已完成但状态更新丢失）
+            const idx = tempFiles.findIndex(f => f.file_id === fileId);
+            if (idx >= 0 && tempFiles[idx].status === 'processing') {
+                tempFiles[idx].status = 'done';
+                renderTempFileBar();
+            }
+        }
+
+        async function handleTempFileUpload(input) {
+            if (!input.files || !input.files[0]) return;
+
+            const file = input.files[0];
+            if (file.size > MAX_TEMP_FILE_SIZE) {
+                showToast(`文件过大 (${formatFileSize(file.size)})，最大支持 200MB`, 'error');
+                input.value = '';
+                return;
+            }
+
+            if (!currentConvId) {
+                // 自动创建对话
+                try {
+                    const result = await api.createConversation(currentCourseId || null, '临时文件对话');
+                    currentConvId = result.data.id;
+                    await loadConversations();
+                } catch (error) {
+                    showToast('创建对话失败', 'error');
+                    input.value = '';
+                    return;
+                }
+            }
+
+            // 提取扩展名，先显示"处理中"状态（用临时 ID 占位）
+            const ext = (file.name.split('.').pop() || '').toLowerCase();
+            const tempStatusId = 'uploading-' + Date.now();
+            tempFiles.push({
+                file_id: tempStatusId,
+                filename: file.name,
+                file_type: ext,
+                file_size: file.size,
+                status: 'processing'
+            });
+            renderTempFileBar();
+
+            input.value = '';
+
+            try {
+                // 上传立即返回（后端异步处理），不再阻塞
+                const result = await api.uploadTempFile(currentConvId, file);
+                const fileData = result.data.file;
+                tempFileSessionId = result.data.session_id;
+
+                // 用服务器返回的真实 file_id 替换占位条目，开始轮询
+                const idx = tempFiles.findIndex(f => f.file_id === tempStatusId);
+                if (idx >= 0) {
+                    tempFiles[idx].file_id = fileData.file_id;
+                    tempFiles[idx].filename = fileData.filename;
+                    tempFiles[idx].file_type = fileData.file_type;
+                    tempFiles[idx].file_size = fileData.file_size;
+                    // 状态保持 'processing'，等待轮询更新
+                }
+                renderTempFileBar();
+
+                // 启动后台轮询（不 await，让用户继续操作）
+                pollTempFileStatus(fileData.file_id);
+
+                showToast(`文件已接收，正在后台处理: ${fileData.filename}`, 'success');
+            } catch (error) {
+                // 更新为失败状态
+                const idx = tempFiles.findIndex(f => f.file_id === tempStatusId);
+                if (idx >= 0) {
+                    tempFiles[idx].status = 'error';
+                }
+                renderTempFileBar();
+                showToast('文件上传失败: ' + error.message, 'error');
+            }
+        }
+
+        function renderTempFileBar() {
+            const bar = document.getElementById('tempFileBar');
+            const list = document.getElementById('tempFileList');
+
+            if (tempFiles.length === 0) {
+                bar.classList.add('hidden');
+                return;
+            }
+
+            bar.classList.remove('hidden');
+            list.innerHTML = tempFiles.map(f => {
+                let statusBadge = '';
+                if (f.status === 'processing') {
+                    statusBadge = '<span class="temp-file-status processing">⏳ 处理中...</span>';
+                } else if (f.status === 'error') {
+                    statusBadge = '<span class="temp-file-status error">❌ 失败</span>';
+                }
+                // 'done' 状态不显示额外标记（界面保持简洁）
+                return `
+                    <span class="temp-file-item">
+                        ${getFileEmoji(f.file_type)} ${f.filename}
+                        ${statusBadge}
+                        <span class="temp-file-remove" onclick="removeTempFile('${f.file_id}')">&times;</span>
+                    </span>
+                `;
+            }).join('');
+        }
+
+        function removeTempFile(fileId) {
+            tempFiles = tempFiles.filter(f => f.file_id !== fileId);
+            if (tempFiles.length === 0) {
+                tempFileSessionId = null;
+            }
+            renderTempFileBar();
+        }
+
+        function clearTempFiles() {
+            tempFiles = [];
+            tempFileSessionId = null;
+            renderTempFileBar();
+            showToast('临时文件已清除', 'info');
         }
 
         function handleInputKey(e) {
@@ -318,6 +529,32 @@
                 sendMessage();
             }
         }
+
+        // ========== 页面可见性处理（防止切标签页导致流中断） ==========
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') {
+                // 切回标签页时，如果流仍在活跃，滚动到最新内容
+                if (currentStreamController) {
+                    const container = document.getElementById('chatMessages');
+                    container.scrollTop = container.scrollHeight;
+                }
+            }
+        });
+
+        // 页面卸载前确保中断流（防止连接泄露）
+        window.addEventListener('beforeunload', () => {
+            if (currentStreamController) {
+                currentStreamController.abort();
+                if (currentConvId) {
+                    // 使用 sendBeacon 确保中断请求发送
+                    navigator.sendBeacon(
+                        `${API_BASE}/conversations/${currentConvId}/interrupt`,
+                        new Blob([JSON.stringify({})], {type: 'application/json'})
+                    );
+                }
+                currentStreamController = null;
+            }
+        });
 
         // 初始化
         loadCourses().then(() => loadConversations());

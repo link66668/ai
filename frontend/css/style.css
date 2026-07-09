@@ -1209,3 +1209,269 @@ table tbody tr:hover {
 .tt-color-9  { --tt-color: #ea580c; }
 .tt-color-10 { --tt-color: #6366f1; }
 .tt-color-11 { --tt-color: #0d9488; }
+
+/* ========== 流式输出 + 临时文件 + 引用渲染 ========== */
+
+/* 闪烁光标 */
+.streaming-cursor::after {
+    content: '▌';
+    animation: blink 1s infinite;
+    color: var(--primary);
+}
+@keyframes blink {
+    0%, 50% { opacity: 1; }
+    51%, 100% { opacity: 0; }
+}
+
+/* 引用标记 */
+.citation {
+    font-size: 0.75em;
+    color: var(--primary);
+    cursor: pointer;
+    vertical-align: super;
+    font-weight: 600;
+    padding: 0 1px;
+}
+.citation:hover {
+    text-decoration: underline;
+    background: var(--primary-light);
+    color: white;
+    border-radius: 2px;
+}
+
+/* 临时文件徽章 */
+.temp-file-badge {
+    display: inline-block;
+    padding: 1px 8px;
+    background: #fef3c7;
+    color: #92400e;
+    border-radius: 4px;
+    font-size: 0.8em;
+    margin: 0 2px;
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+/* 停止按钮 */
+.btn-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+/* 临时文件栏 */
+.temp-file-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    background: var(--gray-50);
+    border-bottom: 1px solid var(--gray-200);
+    flex-wrap: wrap;
+}
+.temp-file-bar.hidden {
+    display: none;
+}
+.temp-file-label {
+    font-size: 13px;
+    color: var(--gray-600);
+    white-space: nowrap;
+}
+.temp-file-list {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    flex: 1;
+}
+.temp-file-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 10px;
+    background: white;
+    border: 1px solid var(--gray-200);
+    border-radius: 16px;
+    font-size: 12px;
+    white-space: nowrap;
+}
+.temp-file-remove {
+    cursor: pointer;
+    color: var(--gray-400);
+    font-weight: bold;
+    font-size: 14px;
+    line-height: 1;
+    padding: 0 2px;
+}
+.temp-file-remove:hover {
+    color: var(--danger);
+}
+
+/* 临时文件状态标记 */
+.temp-file-status {
+    display: inline-flex;
+    align-items: center;
+    font-size: 11px;
+    padding: 1px 6px;
+    border-radius: 10px;
+    white-space: nowrap;
+}
+.temp-file-status.processing {
+    background: #fef3c7;
+    color: #92400e;
+    animation: pulse-status 1.5s ease-in-out infinite;
+}
+.temp-file-status.error {
+    background: #fee2e2;
+    color: #991b1b;
+}
+@keyframes pulse-status {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+/* 进度条 */
+.upload-progress {
+    width: 100%;
+    height: 4px;
+    background: var(--gray-200);
+    border-radius: 2px;
+    margin-top: 6px;
+    overflow: hidden;
+}
+.upload-progress-bar {
+    height: 100%;
+    background: var(--primary);
+    border-radius: 2px;
+    transition: width 0.3s ease;
+}
+
+/* 状态徽章 */
+.badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 500;
+    white-space: nowrap;
+}
+.badge-success { background: #dcfce7; color: #166534; }
+.badge-danger { background: #fef2f2; color: #991b1b; }
+.badge-info { background: #eff6ff; color: #1e40af; }
+.badge-warning { background: #fffbeb; color: #92400e; }
+
+/* 增强 Markdown 代码块样式 */
+.message-bubble pre {
+    background: #1e293b;
+    color: #e2e8f0;
+    padding: 16px;
+    border-radius: 8px;
+    overflow-x: auto;
+    font-size: 13px;
+    line-height: 1.6;
+    margin: 10px 0;
+    position: relative;
+}
+.message-bubble pre .code-lang {
+    position: absolute;
+    top: 4px;
+    right: 8px;
+    font-size: 11px;
+    color: #94a3b8;
+}
+.message-bubble code {
+    background: var(--gray-200);
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-size: 0.9em;
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+}
+.message-bubble pre code {
+    background: none;
+    padding: 0;
+    border-radius: 0;
+    font-size: inherit;
+    color: inherit;
+}
+
+/* 增强 Markdown 表格样式 */
+.message-bubble table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 10px 0;
+    font-size: 13px;
+}
+.message-bubble table th,
+.message-bubble table td {
+    border: 1px solid var(--gray-300);
+    padding: 6px 12px;
+    text-align: left;
+}
+.message-bubble table th {
+    background: var(--gray-100);
+    font-weight: 600;
+}
+.message-bubble table tr:nth-child(even) {
+    background: var(--gray-50);
+}
+
+/* 增强 Markdown 其他元素样式 */
+.message-bubble blockquote {
+    border-left: 4px solid var(--primary);
+    padding: 8px 16px;
+    color: var(--gray-600);
+    margin: 10px 0;
+    background: var(--gray-50);
+    border-radius: 0 6px 6px 0;
+}
+.message-bubble hr {
+    border: none;
+    border-top: 1px solid var(--gray-200);
+    margin: 16px 0;
+}
+.message-bubble ul, .message-bubble ol {
+    padding-left: 20px;
+    margin: 8px 0;
+}
+.message-bubble li {
+    margin: 4px 0;
+    line-height: 1.6;
+}
+.message-bubble h1, .message-bubble h2, .message-bubble h3, .message-bubble h4 {
+    margin: 14px 0 8px 0;
+    line-height: 1.4;
+    font-weight: 600;
+}
+.message-bubble h1 { font-size: 1.4em; }
+.message-bubble h2 { font-size: 1.25em; border-bottom: 1px solid var(--gray-200); padding-bottom: 4px; }
+.message-bubble h3 { font-size: 1.1em; }
+.message-bubble h4 { font-size: 1.05em; color: var(--gray-600); }
+.message-bubble a {
+    color: var(--primary);
+    text-decoration: underline;
+}
+.message-bubble img {
+    max-width: 100%;
+    border-radius: 6px;
+    margin: 8px 0;
+}
+
+/* 消息引用区域 */
+.message-references {
+    font-size: 12px;
+    color: var(--gray-600);
+    margin-top: 6px;
+    padding: 6px 10px;
+    background: var(--gray-50);
+    border-radius: 6px;
+}
+.message-references.hidden {
+    display: none;
+}
+

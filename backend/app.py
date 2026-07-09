@@ -2,6 +2,10 @@ from flask import Flask, send_from_directory, jsonify, request
 from flask_cors import CORS
 import os
 import traceback
+from dotenv import load_dotenv
+
+# 加载 .env（必须在导入 config 之前）
+load_dotenv(os.path.join(os.path.dirname(__file__), '.env'))
 
 from config import Config
 from database import db
@@ -9,6 +13,15 @@ from routes import auth_bp, course_bp, document_bp, chat_bp, task_bp, plan_bp, a
 
 def create_app():
     """创建Flask应用"""
+    # 启动时校验必需的环境变量
+    required_vars = ['SECRET_KEY', 'AI_API_KEY']
+    missing = [v for v in required_vars if not os.environ.get(v)]
+    if missing:
+        raise RuntimeError(
+            f'缺少必需的环境变量: {", ".join(missing)}，'
+            f'请检查 backend/.env 文件是否存在且配置正确'
+        )
+
     app = Flask(__name__, static_folder='../frontend', static_url_path='')
 
     # 加载配置
@@ -79,7 +92,14 @@ def create_app():
     # 健康检查
     @app.route('/api/health')
     def health_check():
-        return {'status': 'ok', 'message': '课程学习助手Agent平台运行中'}
+        from services.vision_service import vision_service
+        return {
+            'status': 'ok',
+            'message': '课程学习助手Agent平台运行中',
+            'vision_engine': vision_service.get_active_engine_name(),
+            'vision_enabled': Config.VISION_ENABLED,
+            'streaming_enabled': Config.STREAMING_ENABLED,
+        }
 
     # 静态资源(css/js)和前端页面（放在最后，优先级最低）
     @app.route('/<path:path>')
@@ -160,11 +180,29 @@ def init_demo_data():
 
 if __name__ == '__main__':
     app = create_app()
-    # 确保上传目录存在
+
+    # 确保上传目录和其他数据目录存在
     os.makedirs(Config.UPLOAD_FOLDER, exist_ok=True)
+    os.makedirs(Config.CHROMA_DATA_PATH, exist_ok=True)
+    os.makedirs(Config.BM25_INDEX_PATH, exist_ok=True)
+
     # 初始化演示数据
     with app.app_context():
         init_demo_data()
+        # 初始化异步处理管线
+        from services.async_pipeline import pipeline
+        print(f'[启动] 异步处理管线已就绪')
+        # 预热嵌入 API（后台线程，验证连通性，不阻塞启动）
+        print('[启动] 后台验证嵌入 API 连通性...')
+        import threading
+        def warmup_embedding():
+            try:
+                from services.embedding_service import embedding_service
+                _ = embedding_service.embed_texts(['预热'])
+                print(f'[启动] 嵌入 API 就绪（维度: {embedding_service._dimension}）')
+            except Exception as e:
+                print(f'[启动] 嵌入 API 预热失败（将在首次处理时使用哈希降级）: {e}')
+        threading.Thread(target=warmup_embedding, daemon=True).start()
 
     print()
     print('=' * 50)

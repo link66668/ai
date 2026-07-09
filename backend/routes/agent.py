@@ -6,7 +6,7 @@ agent_bp = Blueprint('agent', __name__, url_prefix='/api/agent')
 @agent_bp.route('/chat', methods=['POST'])
 @token_required
 def chat(current_user):
-    """Agent课程问答"""
+    """Agent课程问答（RAG 增强）"""
     from services.ai_service import ai_service
 
     data = request.get_json()
@@ -18,8 +18,15 @@ def chat(current_user):
         return error_response('消息不能为空')
 
     course_id = data.get('course_id')
+    temp_file_session_id = data.get('temp_file_session_id')
 
-    result = ai_service.chat(message, course_id)
+    # 使用 RAG 增强对话
+    result = ai_service.chat_rag(
+        message=message,
+        course_id=course_id,
+        temp_file_session_id=temp_file_session_id,
+        stream=False,
+    )
     return success_response(result)
 
 @agent_bp.route('/summarize', methods=['POST'])

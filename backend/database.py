@@ -129,11 +129,92 @@ class Database:
                 )
             ''')
 
+            # ========== 全格式文档引擎 + RAG 新增表 ==========
+
+            # 迁移 documents 表：添加处理相关字段（幂等——仅添加不存在的列）
+            self._migrate_documents_table(cursor)
+
+            # 文档分块表
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS document_chunks (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    document_id INTEGER NOT NULL,
+                    course_id INTEGER NOT NULL,
+                    chunk_index INTEGER NOT NULL,
+                    chunk_type TEXT DEFAULT 'text',
+                    content TEXT NOT NULL,
+                    token_count INTEGER DEFAULT 0,
+                    page_start INTEGER DEFAULT 0,
+                    page_end INTEGER DEFAULT 0,
+                    heading_path TEXT,
+                    metadata_json TEXT,
+                    chroma_id TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE,
+                    FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE
+                )
+            ''')
+
+            # 文档处理日志表
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS document_processing_log (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    document_id INTEGER NOT NULL,
+                    stage TEXT NOT NULL,
+                    status TEXT NOT NULL DEFAULT 'started',
+                    message TEXT,
+                    duration_ms INTEGER,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE
+                )
+            ''')
+
+            # 临时文件会话表（仅元数据，不含文件内容）
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS temp_file_sessions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    session_id TEXT NOT NULL,
+                    conversation_id INTEGER,
+                    file_name TEXT NOT NULL,
+                    file_type TEXT DEFAULT '',
+                    file_size INTEGER DEFAULT 0,
+                    destroyed_at TIMESTAMP,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE SET NULL
+                )
+            ''')
+
             conn.commit()
         except Exception as e:
             print(f"[数据库初始化错误] {e}")
         finally:
             cursor.close()
+
+    def _migrate_documents_table(self, cursor):
+        """为 documents 表添加处理相关字段（幂等迁移）"""
+        # 获取现有列
+        cursor.execute("PRAGMA table_info(documents)")
+        existing_columns = {row[1] for row in cursor.fetchall()}
+
+        # 需要添加的新列定义
+        new_columns = [
+            ('processing_status', "TEXT DEFAULT 'pending'"),
+            ('processing_progress', 'REAL DEFAULT 0.0'),
+            ('processing_error', 'TEXT'),
+            ('structured_content', 'TEXT'),
+            ('toc_tree', 'TEXT'),
+            ('page_count', 'INTEGER DEFAULT 0'),
+            ('chunk_count', 'INTEGER DEFAULT 0'),
+            ('metadata_json', 'TEXT'),
+        ]
+
+        for col_name, col_def in new_columns:
+            if col_name not in existing_columns:
+                try:
+                    cursor.execute(f"ALTER TABLE documents ADD COLUMN {col_name} {col_def}")
+                    print(f"[数据库迁移] documents 表添加列: {col_name}")
+                except Exception as e:
+                    print(f"[数据库迁移] 添加列 {col_name} 失败: {e}")
 
     def get_connection(self):
         """获取当前线程的数据库连接"""
