@@ -30,6 +30,7 @@ def __getattr__(name):
         'StreamingService': '.streaming_service',
         'vision_service': '.vision_service',
         'VisionService': '.vision_service',
+        'course_import_service': '.course_import_service',
     }
 
     if name in _imports:
@@ -57,4 +58,5 @@ __all__ = [
     'RetrievalService',
     'streaming_service', 'StreamingService',
     'vision_service', 'VisionService',
+    'course_import_service',
 ]

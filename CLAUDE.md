@@ -179,6 +179,8 @@ Flask 同时服务 API 和前端静态文件：
 
 `services/__init__.py` 使用 `__getattr__` 实现延迟导入，避免循环依赖。直接 `from services import ai_service` 或 `from services.ai_service import ai_service` 均可。
 
+**⚠️ 新增 Service 文件时必须同步更新 `services/__init__.py`**：在 `_imports` dict 中添加模块映射，在 `__all__` 列表中添加导出名。否则 `from services import YourNewService` 会抛出 `AttributeError`。这是本项目的 #1 易错点。
+
 ### 优雅降级链
 
 系统有多层降级策略，确保在无外部API时仍可运行：
@@ -264,17 +266,23 @@ api_key = config.ai_api_key if config and config.ai_api_key else Config.AI_API_K
 
 ---
 
-## 数据库（8 张表 + 1 张配置表）
+## 数据库（11 张表）
 
-核心表：`users` · `courses` · `documents` · `conversations` · `messages` · `tasks` · `study_plans`
+| 表名 | 说明 |
+|---|---|
+| `users` | 用户（username, password_hash, email, avatar） |
+| `courses` | 课程（name, teacher, semester, credit, status=active/archived） |
+| `documents` | 课程资料（含 processing_status/progress/error, structured_content, toc_tree 等处理字段） |
+| `conversations` | AI 对话（可绑定 course_id） |
+| `messages` | 对话消息（role=user/assistant, content, references） |
+| `tasks` | 学习任务（支持 parent_task_id 自引用子任务，priority=高/中/低） |
+| `study_plans` | 学习计划（goal, exam_date, daily_hours, plan_data JSON） |
+| `document_chunks` | 文档分块（chunk_index, content, token_count, page_start/end, heading_path, chroma_id） |
+| `document_processing_log` | 文档处理日志（stage, status, duration_ms） |
+| `temp_file_sessions` | 对话临时文件会话元数据（不含文件内容，内容仅存内存） |
+| `user_ai_configs` | 用户 AI 配置（9字段：对话/视觉/嵌入 × api_key/api_url/model） |
 
-扩展表：
-- `document_chunks` — 文档分块（chunk_index, content, token_count, page_start/end, heading_path）
-- `document_processing_log` — 处理日志（stage, status, duration_ms）
-- `temp_file_sessions` — 对话临时文件会话
-- `user_ai_configs` — 用户 AI 配置（9字段：3模型×3属性）
-
-`documents` 表有额外处理字段（`processing_status`, `processing_progress`, `structured_content`, `toc_tree` 等），通过幂等迁移添加。
+所有表定义在 `database.py` 的 `_init_db()` 中，`PRAGMA foreign_keys = ON`，支持 CASCADE/SET NULL 级联。
 
 ---
 
@@ -296,6 +304,7 @@ api_key = config.ai_api_key if config and config.ai_api_key else Config.AI_API_K
 |---|---|
 | 新增 API 接口 | `backend/routes/` 新建或修改蓝图 + `app.py` 注册 |
 | 新增数据表 | `backend/database.py` 的 `_init_db()` |
+| 新增 Service | ① 在 `backend/services/` 新建 .py ② 在 `services/__init__.py` 的 `_imports` dict 和 `__all__` 中添加条目 |
 | 修改 AI 对话行为 | `backend/services/ai_service.py`（`chat()` / `chat_rag()`） |
 | 修改文档解析 | `backend/services/document_parser.py` |
 | 修改分块策略 | `backend/services/chunking_service.py` + `config.py` CHUNK_SIZE |

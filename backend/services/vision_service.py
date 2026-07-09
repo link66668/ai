@@ -241,8 +241,11 @@ class VisionService:
                 }
 
             # 每次调用都创建新客户端以支持用户配置（缓存会降低灵活性）
+            base_url = config['vision_api_url'].rstrip('/')
+            if base_url.endswith('/v1'):
+                base_url = base_url[:-3]
             client = OpenAI(
-                base_url=config['vision_api_url'],
+                base_url=base_url,
                 api_key=config['vision_api_key'],
                 timeout=120.0,  # 图片理解可能需要较长时间
             )

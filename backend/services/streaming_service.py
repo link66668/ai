@@ -37,6 +37,13 @@ class StreamingService:
         """检查是否已中断"""
         return conversation_id in _interrupted_conversations
 
+    def _normalize_base_url(url: str) -> str:
+        """去掉 URL 末尾的 /v1，OpenAI SDK 会自动追加"""
+        url = url.rstrip('/')
+        if url.endswith('/v1'):
+            url = url[:-3]
+        return url
+
     def stream_chat(self, messages, conversation_id=None, temperature=0.7):
         """
         SSE 流式聊天生成器
@@ -71,7 +78,7 @@ class StreamingService:
                 }
 
             client = OpenAI(
-                base_url=config['ai_api_url'],
+                base_url=self._normalize_base_url(config['ai_api_url']),
                 api_key=config['ai_api_key'],
                 timeout=90.0,
             )
@@ -149,7 +156,7 @@ class StreamingService:
                 }
 
             client = OpenAI(
-                base_url=config['ai_api_url'],
+                base_url=self._normalize_base_url(config['ai_api_url']),
                 api_key=config['ai_api_key'],
                 timeout=90.0,
             )

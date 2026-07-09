@@ -70,8 +70,11 @@ class EmbeddingService:
             }
 
         # 每次调用都创建新客户端以支持用户配置
+        base_url = config['embedding_api_url'].rstrip('/')
+        if base_url.endswith('/v1'):
+            base_url = base_url[:-3]
         client = OpenAI(
-            base_url=config['embedding_api_url'],
+            base_url=base_url,
             api_key=config['embedding_api_key'],
             timeout=30.0,
         )
