@@ -17,6 +17,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **服务地址：** `http://localhost:5000`
 - **演示账号：** `demo / 123456`
 - **语言：** 全中文 UI
+- **注意：** README.md 中提到 MySQL 是过时的，实际使用 SQLite。
 
 ---
 
@@ -25,257 +26,267 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | 层面 | 技术 |
 |---|---|
 | 后端 | Python 3.10+ · Flask 3.0 |
-| 数据库 | SQLite（文件：`backend/course_agent.db`，线程本地连接） |
+| 数据库 | SQLite（线程本地连接，单例 `db`） |
 | 前端 | 原生 HTML/CSS/JS（无框架、无构建工具） |
-| AI | DeepSeek LLM API（`services/ai_service.py`），支持 Mock/真实双模式 |
-| 文档处理 | PyMuPDF · python-docx · python-pptx · EasyOCR · Pillow |
-| 检索 | BM25（rank-bm25）· 向量嵌入（OpenAI兼容API） |
-| 认证 | JWT（PyJWT）+ bcrypt 密码哈希 |
-| 依赖 | ~30 个 Python 包，见 `backend/requirements.txt` |
+| AI | DeepSeek API（OpenAI兼容），支持 Mock/真实双模式 |
+| 文档处理 | PyMuPDF · python-docx · python-pptx · EasyOCR |
+| 检索 | BM25（rank-bm25）· 向量嵌入（OpenAI Embeddings API） |
+| 认证 | JWT（PyJWT）+ bcrypt |
 
-**注意：** README.md 中提到 MySQL 是过时的，实际使用 SQLite。
+---
+
+## 启动与开发命令
+
+```bash
+# 一键启动（Windows）
+start.bat
+
+# 手动启动
+cd backend && pip install -r requirements.txt && python app.py
+
+# 查看路由
+python -c "from app import app; print([r.rule for r in app.url_map.iter_rules()])"
+
+# 查数据库
+python -c "from database import db; print(db.fetch_all('SELECT name FROM sqlite_master WHERE type=\"table\"'))"
+```
+
+**必需配置：** 仅需 `SECRET_KEY` 即可启动，AI 自动降级为 Mock。在 `backend/.env` 中配置 `AI_API_KEY` 启用真实 AI。
+
+**无测试框架、无 linter、无代码格式化工具。** 修改后需手动启动服务器验证。
 
 ---
 
 ## 目录结构
 
 ```
-ai/                              # 项目根目录
+ai/
+├── docs/
+│   └── task.md               # 详细实施规格书（RAG管线/流式/临时文件/技术选型/风险）
 ├── backend/
-│   ├── app.py              # Flask 入口 + Demo 数据初始化
-│   ├── config.py           # 全局配置（SQLite路径、JWT、AI、上传、RAG）
-│   ├── database.py         # 线程安全 SQLite 管理器（单例 + thread-local）
-│   ├── requirements.txt    # Python 依赖（~30个包）
-│   ├── .env                # 环境变量（API keys等）
-│   ├── models/             # 数据访问层（6 个模型）
-│   │   ├── user.py         #   用户 CRUD
-│   │   ├── course.py       #   课程 CRUD
-│   │   ├── document.py     #   文档 CRUD
-│   │   ├── chat.py         #   对话 + 消息 CRUD
-│   │   ├── task.py         #   任务 CRUD（含子任务）
-│   │   └── user_ai_config.py #  用户 AI 配置 CRUD
-│   ├── routes/             # API 蓝图（8 个路由模块）
-│   │   ├── auth.py         #   /api/auth/*
-│   │   ├── course.py       #   /api/courses/*
-│   │   ├── document.py     #   /api/documents/*
-│   │   ├── chat.py         #   /api/conversations/*
-│   │   ├── task.py         #   /api/tasks/*
-│   │   ├── plan.py         #   /api/plans/*
-│   │   ├── agent.py        #   /api/agent/*
-│   │   ├── user_ai_config.py #  /api/user/ai-config/*
-│   │   └── utils.py        #   JWT 验证装饰器 + 用户上下文设置
-│   ├── services/
-│   │   ├── ai_service.py   #   AI 服务（对话/摘要/知识提取/计划生成/任务分解）
-│   │   ├── search_service.py #  文档全文搜索
-│   │   ├── user_context.py #   用户上下文管理（线程本地变量传递 user_id）
-│   │   ├── streaming_service.py # SSE 流式输出（支持用户配置）
-│   │   ├── vision_service.py #   视觉模型调用（支持用户配置）
-│   │   └── embedding_service.py # 嵌入模型调用（支持用户配置）
-│   └── uploads/            # 用户上传文件存储（UUID 重命名）
+│   ├── .env.example          # 环境变量模板
+│   ├── app.py                  # Flask 入口 + Demo 数据初始化 + 嵌入API预热
+│   ├── config.py               # 全局配置（从 .env / 环境变量加载）
+│   ├── database.py             # SQLite 线程安全管理器（单例 db）
+│   ├── models/                 # 数据访问层（全静态方法，无实例化）
+│   │   ├── user.py             #   用户 CRUD + 密码验证
+│   │   ├── course.py           #   课程 CRUD
+│   │   ├── document.py         #   文档 CRUD + 处理状态更新 + 分块查询
+│   │   ├── chat.py             #   对话 + 消息 CRUD
+│   │   ├── task.py             #   任务 CRUD（含子任务）
+│   │   └── user_ai_config.py   #   用户 AI 配置 CRUD
+│   ├── routes/                 # API 蓝图（8 模块 + utils）
+│   │   ├── utils.py            #   token_required 装饰器 + success/error_response
+│   │   ├── auth.py             #   /api/auth/*
+│   │   ├── course.py           #   /api/courses/*
+│   │   ├── document.py         #   /api/documents/*（含异步处理端点）
+│   │   ├── chat.py             #   /api/conversations/*（含 SSE 流式 + 临时文件 + 中断）
+│   │   ├── task.py             #   /api/tasks/*
+│   │   ├── plan.py             #   /api/plans/*
+│   │   ├── agent.py            #   /api/agent/*
+│   │   └── user_ai_config.py   #   /api/user/ai-config/*
+│   ├── services/               # 业务逻辑层
+│   │   ├── ai_service.py       #   AI 核心（对话/摘要/知识提取/RAG/chat_rag）
+│   │   ├── async_pipeline.py   #   异步文档处理管线（ThreadPoolExecutor）
+│   │   ├── document_parser.py  #   多格式文档文本提取
+│   │   ├── chunking_service.py #   文档分块
+│   │   ├── embedding_service.py#   向量嵌入（支持用户配置）
+│   │   ├── vector_store.py     #   向量存储/检索
+│   │   ├── bm25_manager.py     #   BM25 索引管理
+│   │   ├── retrieval_service.py#   混合检索（向量+BM25 → RRF融合）
+│   │   ├── search_service.py   #   文档全文搜索
+│   │   ├── streaming_service.py#   SSE 流式输出（支持中断+心跳）
+│   │   ├── vision_service.py   #   视觉模型调用
+│   │   ├── ocr_service.py      #   OCR 文字识别
+│   │   ├── layout_analyzer.py  #   版面分析
+│   │   ├── table_extractor.py  #   表格提取
+│   │   ├── document_structure.py#  文档结构抽取
+│   │   ├── temp_file_service.py#   对话临时文件异步处理
+│   │   ├── course_import_service.py # 课程CSV导入
+│   │   └── user_context.py     #   线程本地用户上下文
+│   └── uploads/                # 上传文件存储（UUID重命名）
 ├── frontend/
-│   ├── index.html          # 登录/注册页
-│   ├── dashboard.html      # 仪表盘（统计卡片 + 快捷操作）
-│   ├── courses.html        # 课程管理（筛选/搜索/创建/归档）
-│   ├── course_detail.html  # 课程详情（文档标签页 + 任务标签页）
-│   ├── chat.html           # AI 对话界面（会话列表 + 消息流）
-│   ├── tasks.html          # 任务管理（智能分解 + 课表视图 + 列表视图）
-│   ├── plan.html           # 学习计划（AI生成 + 阶段时间线）
-│   ├── profile.html        # 用户资料（编辑/改密/数据导出）
-│   ├── ai_settings.html    # AI 模型配置（用户独立 API Key 设置）
-│   ├── css/style.css       # 全局 CSS 设计系统（CSS 变量）
+│   ├── index.html              # 登录/注册（入口页，SPA fallback）
+│   ├── dashboard.html          # 仪表盘
+│   ├── courses.html            # 课程管理
+│   ├── course_detail.html      # 课程详情（文档+任务标签页）
+│   ├── chat.html               # AI 对话（SSE流式）
+│   ├── tasks.html              # 任务管理
+│   ├── plan.html               # 学习计划
+│   ├── profile.html            # 个人中心
+│   ├── ai_settings.html        # AI 模型配置
+│   ├── css/style.css           # 全局 CSS（CSS变量设计系统）
 │   └── js/
-│       ├── api.js          # REST API 客户端（fetch + JWT 自动注入）
-│       └── utils.js        # 工具函数（认证检查/Toast/Markdown渲染等）
-├── PROJECT_PLAN.md         # 项目计划文档
-├── README.md               # 项目说明文档
-├── 任务.md                  # 任务清单
-├── CLAUDE.md               # 本文件 — AI 上下文
-└── start.bat               # Windows 一键启动脚本
+│       ├── api.js              # API 客户端（单例 api，JWT自动注入，SSE流式）
+│       └── utils.js            # Toast/日期格式化/Markdown渲染/认证检查
+├── README.md                   # 详细说明（API表格/数据库设计/环境配置）
+├── 任务.md                      # 课程设计要求与任务清单
+├── CLAUDE.md                   # 本文件
+└── start.bat                   # Windows 一键启动
 ```
 
 ---
 
-## 数据库（8 张表）
+## 核心架构模式
 
-| 表名 | 用途 | 关键字段 |
-|---|---|---|
-| `users` | 用户 | username, password_hash, email, avatar |
-| `courses` | 课程 | user_id→users, name, teacher, semester, credit, status(active/archived) |
-| `documents` | 文档 | course_id→courses, filename(UUID), original_name, file_path, category(课件/实验指导/作业/笔记/其他), content_text |
-| `conversations` | 对话 | user_id→users, course_id→courses, title |
-| `messages` | 消息 | conversation_id→conversations, role(user/assistant), content, references(JSON) |
-| `tasks` | 任务 | user_id→users, course_id→courses, title, task_type(日常作业/实验任务/复习计划/考试准备/其他), priority(高/中/低), status(待办/进行中/已完成), parent_task_id→tasks(自引用) |
-| `study_plans` | 学习计划 | user_id→users, course_id→courses, title, goal, exam_date, daily_hours, plan_data(JSON) |
-| `user_ai_configs` | 用户 AI 配置 | user_id→users(UNIQUE), ai_api_key, ai_api_url, ai_model, vision_api_key, vision_api_url, vision_model, embedding_api_key, embedding_api_url, embedding_model |
+### 请求生命周期
 
-**特性：** 线程本地连接、外键级联删除、首次运行自动建表、用户 AI 配置独立存储
-
----
-
-## API 接口总览
-
-### 认证 `/api/auth`
-- `POST /register` — 注册
-- `POST /login` — 登录（返回 JWT token）
-- `GET /me` — 获取当前用户 🔒
-- `PUT /me` — 更新用户信息 🔒
-
-### 课程 `/api/courses`
-- `GET /` — 课程列表（?status=active|archived|all）🔒
-- `POST /` — 创建课程 🔒
-- `GET /<id>` — 课程详情 🔒
-- `PUT /<id>` — 更新课程 🔒
-- `DELETE /<id>` — 删除课程 🔒
-- `POST /<id>/archive` — 归档课程 🔒
-
-### 文档 `/api/documents`
-- `GET /` — 文档列表（?course_id, ?category）🔒
-- `POST /` — 上传文件（multipart）🔒
-- `GET /<id>` — 文档详情 🔒
-- `GET /<id>/preview` — 预览文档 🔒
-- `DELETE /<id>` — 删除文档 🔒
-- `GET /search` — 搜索文档（?q, ?course_id, ?file_type）🔒
-
-### 对话 `/api/conversations`
-- `GET /` — 对话列表（?course_id）🔒
-- `POST /` — 创建对话 🔒
-- `GET /<id>` — 对话详情 🔒
-- `DELETE /<id>` — 删除对话 🔒
-- `GET /<id>/messages` — 获取消息列表 🔒
-- `POST /<id>/messages` — 发送消息（调用 AI）🔒
-
-### 任务 `/api/tasks`
-- `GET /` — 任务列表（?status, ?course_id）🔒
-- `POST /` — 创建任务 🔒
-- `GET /<id>` — 任务详情（含子任务）🔒
-- `PUT /<id>` — 更新任务 🔒
-- `DELETE /<id>` — 删除任务 🔒
-- `POST /<id>/complete` — 标记完成 🔒
-- `POST /decompose/<id>` — AI 分解任务 🔒
-
-### 学习计划 `/api/plans`
-- `GET /` — 计划列表 🔒
-- `POST /` — 创建计划 🔒
-- `GET /<id>` — 计划详情 🔒
-- `PUT /<id>` — 更新计划 🔒
-- `DELETE /<id>` — 删除计划 🔒
-- `POST /generate` — AI 生成计划 🔒
-
-### AI Agent `/api/agent`
-- `POST /chat` — AI 课程问答（message, course_id）🔒
-- `POST /summarize` — 文本摘要 🔒
-- `POST /extract-knowledge` — 知识提取 🔒
-- `POST /generate-plan` — 生成学习计划 🔒
-- `POST /decompose-task` — 分解任务 🔒
-
-### 用户 AI 配置 `/api/user/ai-config`
-- `GET /` — 获取当前用户的 AI 配置 🔒
-- `PUT /` — 更新当前用户的 AI 配置 🔒
-- `POST /test` — 测试 AI 配置连接 🔒
-- `DELETE /` — 删除用户配置（恢复全局默认）🔒
-
-> 🔒 = 需要 `Authorization: Bearer <token>` 请求头
-
----
-
-## 关键配置（config.py）
-
-| 配置项 | 默认值 | 说明 |
-|---|---|---|
-| `SQLITE_DB_PATH` | `backend/course_agent.db` | 数据库文件路径 |
-| `SECRET_KEY` | `''`（必填） | JWT 签名密钥，通过环境变量设置 |
-| `JWT_EXPIRATION_HOURS` | `24` | Token 有效期（小时） |
-| `UPLOAD_FOLDER` | `backend/uploads/` | 上传文件目录 |
-| `MAX_CONTENT_LENGTH` | `200MB` | 最大上传大小 |
-| `AI_API_URL` | `https://api.deepseek.com` | AI 接口地址 |
-| `AI_API_KEY` | `''`（必填） | DeepSeek API Key，通过环境变量设置 |
-| `AI_MODEL` | `deepseek-chat` | AI 模型名称 |
-| `USE_REAL_LLM` | `true` | `true`=调用真实LLM，`false`=使用Mock |
-| `VISION_ENABLED` | `true` | 启用视觉模型处理图片/PDF |
-| `EMBEDDING_API_KEY` | `''`（必填） | 嵌入模型API Key |
-| `CHUNK_SIZE` | `512` | 文档分块大小（token数） |
-| `STREAMING_ENABLED` | `true` | 启用AI响应流式输出 |
-
-**环境变量配置：** 在 `backend/.env` 文件中设置敏感配置（API keys），或通过系统环境变量注入。
-
----
-
-## 启动方式
-
-```bash
-# Windows 一键启动（推荐）
-start.bat
-
-# 或手动启动
-cd backend
-pip install -r requirements.txt
-python app.py
+```
+HTTP请求 → Flask路由 → @token_required装饰器
+                          ├─ 解析 JWT → 查 User → set_current_user_id(user_id)
+                          └─ 注入 current_user 参数
+                       → 路由函数（权限校验：course.user_id == current_user.id）
+                          → Model 静态方法 → db.fetch_one/fetch_all/insert/update/delete
+                          → Service（从 user_context 获取 user_id → 查用户AI配置 → 调用API）
+                       → teardown_appcontext → db.close_connection()
+                       → clear_current_user_id()
 ```
 
-服务启动后访问 `http://localhost:5000`，演示账号 `demo / 123456`
+### 统一响应格式
 
-**必需配置：** 仅需 `SECRET_KEY` 即可启动，AI 功能会自动降级为 Mock 模式  
-**可选配置：** 在 `.env` 中配置 `AI_API_KEY` 启用真实 AI 服务
+所有 API 返回 `{code: int, msg: str, data?: any}`。使用 `routes/utils.py` 中的辅助函数：
+- `success_response(data, msg, code)` → 200
+- `error_response(msg, code)` → 400/401/403/404/500
 
----
+### token_required 装饰器模式
 
-## 开发命令
-
-```bash
-# 安装依赖
-cd backend
-pip install -r requirements.txt
-
-# 启动开发服务器
-python app.py
-
-# 运行单个 Python 脚本（如测试数据库连接）
-python -c "from database import Database; db = Database(); print(db.execute('SELECT COUNT(*) FROM users'))"
-
-# 查看 Flask 路由
-python -c "from app import app; print([rule.rule for rule in app.url_map.iter_rules()])"
+```python
+@chat_bp.route('/<int:conv_id>', methods=['GET'])
+@token_required
+def get_conversation(current_user, conv_id):  # current_user 由装饰器注入
+    conv = Conversation.find_by_id(conv_id)
+    if conv['user_id'] != current_user['id']:  # 权限校验
+        return error_response('无权访问', 403)
+    ...
 ```
 
-**注意：** 项目未配置测试框架、linter 或代码格式化工具。代码质量通过手动检查。
+### 数据库层
+
+- **单例 `db`**（`database.py`）：线程本地连接，`row_factory=sqlite3.Row`
+- **方法**：`fetch_one(sql, params)` / `fetch_all(sql, params)` / `insert(sql, params)` → lastrowid / `update(sql, params)` → rowcount / `delete(sql, params)` → rowcount
+- **Models**：纯静态方法类，直接调用 `db.xxx()`，不实例化
+- **外键**：`PRAGMA foreign_keys = ON`，CASCADE/SET NULL 级联
+- **修改表结构**：直接改 `database.py` 的 `_init_db()`，然后删除 `backend/course_agent.db` 重启重建
+
+### Flask 双重角色
+
+Flask 同时服务 API 和前端静态文件：
+- `static_folder='../frontend'`，`static_url_path=''`
+- `/<path:path>` 兜底路由：先尝试静态文件，否则返回 `index.html`（SPA 前端路由）
+- `/api/*` 路径永远不会被兜底拦截
+
+### 服务层延迟导入
+
+`services/__init__.py` 使用 `__getattr__` 实现延迟导入，避免循环依赖。直接 `from services import ai_service` 或 `from services.ai_service import ai_service` 均可。
+
+### 优雅降级链
+
+系统有多层降级策略，确保在无外部API时仍可运行：
+
+| 功能 | 首选 | 降级1 | 降级2 |
+|---|---|---|---|
+| AI 对话 | DeepSeek API（OpenAI兼容） | Mock 关键词引擎 | — |
+| 流式输出 | SSE（真实API stream） | 伪流式（一次性返回，逐token yield） | — |
+| 向量嵌入 | OpenAI Embeddings API | 哈希降级（固定维度伪向量） | — |
+| 向量检索 | 向量相似度 + BM25 RRF融合 | 纯 BM25 | — |
+| OCR | PaddleOCR | EasyOCR | — |
+| Token计数 | tiktoken | 字符级估算（len/2） | — |
+
+### 用户上下文传递（线程本地）
+
+`services/user_context.py` 使用 `threading.local()` 在请求中传递 `user_id`：
+- `token_required` 装饰器：请求开始 → `set_current_user_id()`，请求结束 → `clear_current_user_id()`（在 finally 中）
+- Service 层：`get_current_user_id()` → 查询 `UserAIConfig` → 用用户配置或回退全局配置
+- 这避免了在所有函数签名中显式传递 `user_id`
+
+### 用户 AI 配置优先级
+
+`用户配置(user_ai_configs表) > 全局配置(.env) > 默认值`
+
+Service 层统一模式：
+```python
+from services.user_context import get_current_user_id
+from models.user_ai_config import UserAIConfig
+
+user_id = get_current_user_id()
+config = UserAIConfig.get_by_user(user_id) if user_id else None
+api_key = config.ai_api_key if config and config.ai_api_key else Config.AI_API_KEY
+```
+
+### 异步文档处理管线
+
+`services/async_pipeline.py` — 单例 `pipeline`，`ThreadPoolExecutor`（max_workers=2）
+
+```
+上传文档 → pipeline.process_document(doc_id)
+         → _process_worker:
+            1. document_parser    → 文本提取（PDF/Word/PPT/Excel/图片）
+            2. ocr_service        → OCR（图片/PDF扫描件）
+            3. layout_analyzer    → 版面分析
+            4. table_extractor    → 表格提取
+            5. document_structure → 结构抽取（标题层级/段落）
+            6. chunking_service   → 分块（CHUNK_SIZE=512, OVERLAP=128）
+            7. embedding_service  → 向量嵌入
+            8. vector_store       → 向量入库
+            9. bm25_manager       → BM25索引
+         → 每阶段更新 documents.processing_progress (0.0~1.0)
+         → 前端轮询 GET /api/documents/<id>/processing
+```
+
+### SSE 流式对话
+
+`routes/chat.py` → `send_message_stream` 端点：
+- 调用 `ai_service.chat_rag(stream=True)` 生成 SSE 事件流
+- 使用 `Queue + 后台线程` 模式：生产者线程读取LLM流放入队列，主线程从队列取事件 yield
+- 每 15 秒发送 `: heartbeat` SSE 注释，防止代理/浏览器超时断连
+- 支持中断：`streaming_service.mark_interrupted(conv_id)` → 生成器检测后停止
+- 流结束后保存 AI 回复到 messages 表（即使被中断也保存部分内容）
+
+前端 `api.js` → `streamMessage()`：`fetch + ReadableStream`，解析 `data: {...}` SSE 事件，通过回调 `onChunk/onDone/onError` 更新 UI。返回 `AbortController` 支持取消。
 
 ---
 
-## 架构要点
+## API 端点（完整列表见 README.md）
 
-1. **API 响应格式统一：** `{code: 200, msg: '...', data: {...}}`
-2. **Flask 同时提供 API 和静态文件：** `static_folder='../frontend'`，非 API 路由回退到 `index.html`
-3. **AI 双模式：** `USE_REAL_LLM=true` 调用 DeepSeek API；`false` 使用关键词匹配的 Mock 引擎
-4. **用户独立 AI 配置：** 每个用户可配置自己的 API Key（对话/视觉/嵌入模型），存储在 `user_ai_configs` 表，优先级高于全局配置
-5. **用户上下文传递：** 通过 `services/user_context.py` 的线程本地变量在请求中传递 user_id 到服务层
-6. **RAG 文档处理管线：** 上传文档 → 文本提取（PyMuPDF/python-docx等）→ 分块（CHUNK_SIZE=512）→ 嵌入（API调用）→ BM25索引 → 检索增强生成
-7. **多模态支持：** 视觉模型（VISION_ENABLED）处理图片/PDF扫描件，EasyOCR作为降级方案
-8. **流式响应：** AI对话支持SSE流式输出（STREAMING_ENABLED），速率可控（TOKEN_RATE=40 tokens/秒）
-9. **自然语言任务分解：** 解析中文描述（如"两周内复习完高等数学"），自动提取课程、时长、目标类型
-10. **Demo 数据自动初始化：** 首次运行创建 `demo/123456` 用户、3 门课程、3 个示例文档
-11. **文件上传：** UUID 重命名存储，支持 txt/pdf/doc/ppt/xls/图片（最大200MB）
-12. **前端路由：** 所有非 API、非静态文件路径回退到 `index.html`（SPA 风格）
+8 个蓝图，前缀 `/api/`：`auth` · `courses` · `documents` · `conversations` · `tasks` · `plans` · `agent` · `user/ai-config`
+
+关键端点（非标准 CRUD）：
+- `POST /api/conversations/<id>/messages/stream` — SSE 流式对话
+- `POST /api/conversations/<id>/interrupt` — 中断流式生成
+- `POST /api/conversations/<id>/upload-temp` — 上传临时文件（异步处理）
+- `GET /api/documents/<id>/processing` — 查询文档处理进度
+- `POST /api/documents/<id>/reprocess` — 重新处理文档
+- `GET /api/documents/<id>/chunks` — 查看文档分块
+- `POST /api/tasks/decompose/<id>` — AI 分解任务
+- `POST /api/plans/generate` — AI 生成学习计划
+- `POST /api/user/ai-config/test` — 测试 AI 配置连接
+- `GET /api/health` — 健康检查（无需认证）
 
 ---
 
-## 调试与验证
+## 数据库（8 张表 + 1 张配置表）
 
-由于项目未配置自动化测试，修改代码后需手动验证：
+核心表：`users` · `courses` · `documents` · `conversations` · `messages` · `tasks` · `study_plans`
 
-1. **启动服务器** → 浏览器访问 `http://localhost:5000`
-2. **测试 API 接口** → 使用 curl、Postman 或浏览器开发者工具
-   ```bash
-   # 示例：登录获取 token
-   curl -X POST http://localhost:5000/api/auth/login \
-     -H "Content-Type: application/json" \
-     -d '{"username":"demo","password":"123456"}'
-   
-   # 示例：获取课程列表（替换 YOUR_TOKEN）
-   curl http://localhost:5000/api/courses \
-     -H "Authorization: Bearer YOUR_TOKEN"
-   ```
-3. **检查数据库** → 使用 SQLite 客户端或 Python 脚本查询 `backend/course_agent.db`
-4. **查看日志** → Flask 控制台输出错误信息，设置 `FLASK_DEBUG=1` 启用调试模式
-5. **前端调试** → 浏览器开发者工具（F12）查看网络请求、控制台错误
+扩展表：
+- `document_chunks` — 文档分块（chunk_index, content, token_count, page_start/end, heading_path）
+- `document_processing_log` — 处理日志（stage, status, duration_ms）
+- `temp_file_sessions` — 对话临时文件会话
+- `user_ai_configs` — 用户 AI 配置（9字段：3模型×3属性）
+
+`documents` 表有额外处理字段（`processing_status`, `processing_progress`, `structured_content`, `toc_tree` 等），通过幂等迁移添加。
+
+---
+
+## 前端模式
+
+- **SPA 风格**：每个页面是独立 HTML，通过 Flask 兜底路由返回 `index.html`
+- **API 封装**：`js/api.js` 导出全局 `api` 单例（`ApiClient` 类），自动注入 JWT Bearer token
+- **认证**：JWT 存在 `localStorage('token')`，401 响应自动清除并跳转登录页
+- **CSS 变量**：`css/style.css` 使用 `:root` 定义设计系统（`--primary`, `--gray-*`, `--shadow`, `--radius`）
+- **布局**：侧边栏固定（`.sidebar` 240px），主内容区 `.main-content`
+- **通用工具**：`js/utils.js` — `showToast()`, `formatDate()`, `formatFileSize()`, `getFileIcon()`, `checkAuth()`
+- **Markdown 渲染**：对话消息支持 Markdown（`renderMarkdown()` in utils.js）
 
 ---
 
@@ -284,34 +295,27 @@ python -c "from app import app; print([rule.rule for rule in app.url_map.iter_ru
 | 需求 | 修改文件 |
 |---|---|
 | 新增 API 接口 | `backend/routes/` 新建或修改蓝图 + `app.py` 注册 |
-| 新增数据表 | `backend/database.py` 的 `_create_tables()` |
-| 修改 AI 行为 | `backend/services/ai_service.py` |
-| 修改页面样式 | `frontend/css/style.css` |
-| 新增前端页面 | `frontend/` 新建 HTML + `js/api.js` 添加接口调用 |
-| 修改认证逻辑 | `backend/routes/utils.py`（JWT 装饰器） |
-| 切换 Mock/真实 AI | `backend/config.py` 的 `USE_REAL_LLM` 或环境变量 |
-| 修改用户 AI 配置逻辑 | `backend/models/user_ai_config.py` + `backend/routes/user_ai_config.py` |
-| 添加新的 AI 模型类型 | 1) `user_ai_configs` 表添加字段 2) `UserAIConfig` 模型更新 3) 前端表单添加 |
+| 新增数据表 | `backend/database.py` 的 `_init_db()` |
+| 修改 AI 对话行为 | `backend/services/ai_service.py`（`chat()` / `chat_rag()`） |
+| 修改文档解析 | `backend/services/document_parser.py` |
+| 修改分块策略 | `backend/services/chunking_service.py` + `config.py` CHUNK_SIZE |
+| 修改检索/排序 | `backend/services/retrieval_service.py`（RRF 融合参数） |
+| 修改流式输出 | `backend/services/streaming_service.py` |
+| 修改页面样式 | `frontend/css/style.css`（CSS 变量） |
+| 新增前端页面 | `frontend/` 新建 HTML + `js/api.js` 添加方法 |
+| 修改认证逻辑 | `backend/routes/utils.py`（`token_required` 装饰器） |
+| 切换 Mock/真实 AI | `config.py` 的 `USE_REAL_LLM` 或 `.env` |
+| 添加新 AI 模型类型 | ① `user_ai_configs` 加列 ② `UserAIConfig` 模型更新 ③ 前端表单 ④ Service 层读取 |
 
 ---
 
-## 用户 AI 配置系统
+## 调试提示
 
-**功能说明：** 每个用户可以配置自己的 AI 模型 API Key，独立于全局配置。
-
-**配置优先级：** 用户配置 > 全局配置（.env 文件）
-
-**实现机制：**
-1. **数据库表：** `user_ai_configs` 存储每个用户的 9 个配置项（3个模型 × 3个字段）
-2. **用户上下文：** `services/user_context.py` 使用线程本地变量在请求中传递 user_id
-3. **装饰器集成：** `token_required` 装饰器自动设置/清除用户上下文
-4. **服务层调用：** `ai_service.py`、`streaming_service.py`、`vision_service.py`、`embedding_service.py` 从上下文获取 user_id，查询用户配置
-5. **降级策略：** 如果用户未配置或字段为空，自动回退到全局配置
-
-**API 接口：**
-- `GET /api/user/ai-config/` — 获取配置（API Key 掩码显示）
-- `PUT /api/user/ai-config/` — 更新配置
-- `POST /api/user/ai-config/test` — 测试连接
-- `DELETE /api/user/ai-config/` — 删除配置（恢复默认）
-
-**前端页面：** `frontend/ai_settings.html` — 独立的配置页面，包含三个表单（对话/视觉/嵌入模型）
+- **详细实施规格**：`docs/task.md` 包含 RAG 管线、流式协议、临时文件、技术选型、风险缓解等完整设计文档
+- **重置数据库**：删除 `backend/course_agent.db` 重启即可重建所有表（演示数据也会重新初始化）
+- **Flask 日志**：控制台直接输出，`FLASK_DEBUG=1` 启用调试模式
+- **数据库检查**：`python -c "from database import db; print(db.fetch_all('SQL'))"`
+- **API 测试**：先 `POST /api/auth/login` 获取 token，再带 `Authorization: Bearer <token>` 请求
+- **前端调试**：F12 → Network 看 API 请求，Console 看 JS 错误
+- **文档处理调试**：查 `document_processing_log` 表 + `documents.processing_error` 字段
+- **AI 降级测试**：将 `USE_REAL_LLM` 设为 `false`，系统使用 Mock 引擎（关键词匹配）

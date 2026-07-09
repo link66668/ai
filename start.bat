@@ -33,10 +33,6 @@ echo   Account:  demo / 123456
 echo   Press Ctrl+C to stop
 echo ========================================
 echo.
-echo NOTE: If you see database errors, please run:
-echo   python %~dp0setup_db.py
-echo   to initialize the database first.
-echo.
 
 python app.py
 pause

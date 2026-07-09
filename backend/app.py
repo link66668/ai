@@ -13,15 +13,6 @@ from routes import auth_bp, course_bp, document_bp, chat_bp, task_bp, plan_bp, a
 
 def create_app():
     """创建Flask应用"""
-    # 启动时校验必需的环境变量
-    required_vars = ['SECRET_KEY']
-    missing = [v for v in required_vars if not os.environ.get(v)]
-    if missing:
-        raise RuntimeError(
-            f'缺少必需的环境变量: {", ".join(missing)}，'
-            f'请检查 backend/.env 文件是否存在且配置正确'
-        )
-
     # 可选：检查 AI 配置
     if not os.environ.get('AI_API_KEY'):
         print('[WARNING] AI_API_KEY not configured, AI features will use Mock mode')
