@@ -1106,7 +1106,7 @@ class AIService:
         # 系统提示
         messages.append({
             'role': 'system',
-            'content': '你是一个专业的课程学习助手，请用中文回答学生的问题。回答要准确、详细、有条理。'
+            'content': '你是课程学习助手，用中文回答。回答简洁准确，不要过度展开。'
         })
 
         # 对话历史

@@ -199,52 +199,18 @@ def send_message_stream(current_user, conv_id):
 
     def generate():
         full_response = ''
-        citations = []
 
-        # 使用 Queue + 后台线程实现心跳，防止切标签页/代理超时断开 SSE 连接
-        from queue import Queue, Empty
-        import threading
-
-        event_queue = Queue()
-
-        def producer():
-            try:
-                for event in stream_gen:
-                    event_queue.put(event)
-            except Exception:
-                pass
-            event_queue.put(None)  # 哨兵：流结束
-
-        producer_thread = threading.Thread(target=producer, daemon=True)
-        producer_thread.start()
-
-        while True:
-            try:
-                event = event_queue.get(timeout=15)  # 每 15 秒发一次心跳
-            except Empty:
-                yield ': heartbeat\n\n'  # SSE 注释，保持连接活跃
-                continue
-
-            if event is None:
-                break  # 流结束
-
+        for event in stream_gen:
             # 解析 SSE 事件提取内容
             if event.startswith('data: '):
                 try:
                     event_data = json.loads(event[6:])
                     if event_data.get('done'):
-                        # 流结束，保存 AI 回复
-                        citations = event_data.get('citations', [])
                         interrupted = event_data.get('interrupted', False)
                         if full_response.strip():
-                            # 被中断时也保存部分内容
                             Message.create(
-                                conv_id,
-                                'assistant',
-                                full_response,
-                                citations
+                                conv_id, 'assistant', full_response, []
                             )
-                        # 更新对话标题
                         if not interrupted and len(history) <= 1:
                             title = content[:20] + ('...' if len(content) > 20 else '')
                             Conversation.update_title(conv_id, title)

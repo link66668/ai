@@ -23,7 +23,22 @@ class StreamingService:
     """SSE 流式生成器"""
 
     def __init__(self):
-        self._token_interval = 1.0 / max(Config.TOKEN_RATE, 1)  # 每个 token 的间隔
+        self._clients = {}  # (api_url, api_key) → OpenAI client
+
+    def _get_client(self, ai_config=None):
+        """获取或创建 OpenAI 客户端（按配置缓存）"""
+        cfg = ai_config or {}
+        api_url = cfg.get('ai_api_url') or Config.AI_API_URL
+        api_key = cfg.get('ai_api_key') or Config.AI_API_KEY
+        cache_key = (api_url, api_key)
+        if cache_key not in self._clients:
+            from openai import OpenAI
+            self._clients[cache_key] = OpenAI(
+                base_url=api_url,
+                api_key=api_key,
+                timeout=90.0,
+            )
+        return self._clients[cache_key]
 
     def mark_interrupted(self, conversation_id):
         """标记对话为已中断"""
@@ -59,24 +74,19 @@ class StreamingService:
             return
 
         try:
-            from openai import OpenAI
-
-            client = OpenAI(
-                base_url=cfg.get('ai_api_url') or Config.AI_API_URL,
-                api_key=cfg.get('ai_api_key') or Config.AI_API_KEY,
-                timeout=90.0,
-            )
+            client = self._get_client(ai_config)
 
             # 清除中断标记
             if conversation_id:
                 self.clear_interrupted(conversation_id)
 
+            cfg = ai_config or {}
             stream = client.chat.completions.create(
                 model=cfg.get('ai_model') or Config.AI_MODEL,
                 messages=messages,
                 stream=True,
                 temperature=temperature,
-                max_tokens=2048,
+                max_tokens=1024,
             )
 
             full_response = ''
@@ -97,8 +107,6 @@ class StreamingService:
                         'content': delta,
                         'done': False,
                     })
-                    # 速率控制
-                    time.sleep(self._token_interval)
 
             # 流结束
             yield self._sse_event({
@@ -110,7 +118,7 @@ class StreamingService:
         except Exception as e:
             logger.error(f"LLM 流式调用失败: {e}")
             # 降级到伪流式
-            yield from self._fallback_blocking(messages, conversation_id)
+            yield from self._fallback_blocking(messages, conversation_id, ai_config)
 
     def blocking_chat(self, messages, temperature=0.7, ai_config=None):
         """
@@ -127,20 +135,14 @@ class StreamingService:
         cfg = ai_config or {}
 
         try:
-            from openai import OpenAI
-
-            client = OpenAI(
-                base_url=cfg.get('ai_api_url') or Config.AI_API_URL,
-                api_key=cfg.get('ai_api_key') or Config.AI_API_KEY,
-                timeout=90.0,
-            )
+            client = self._get_client(ai_config)
 
             response = client.chat.completions.create(
                 model=cfg.get('ai_model') or Config.AI_MODEL,
                 messages=messages,
                 stream=False,
                 temperature=temperature,
-                max_tokens=2048,
+                max_tokens=1024,
             )
 
             return response.choices[0].message.content
