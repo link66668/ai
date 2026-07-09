@@ -40,23 +40,55 @@ class RetrievalService:
 
     def hybrid_search(self, course_id, query, top_k=10, metadata_filter=None, ai_config=None):
         """
-        关键词检索（BM25）
+        混合检索 — 有嵌入模型时走向量+BM25 RRF融合，否则纯BM25
 
         Args:
             course_id: 课程 ID
             query: 查询文本
             top_k: 返回结果数
             metadata_filter: 元数据过滤条件（保留接口，当前未使用）
-            ai_config: 用户AI配置 dict（可选，保留接口）
+            ai_config: 用户AI配置 dict（可选，含 embedding_api_key/url/model）
 
         Returns:
             list[dict]: 检索结果
         """
         from services.bm25_manager import bm25_manager
 
-        # BM25 关键词检索
-        results = bm25_manager.search(course_id, query, top_k=top_k)
-        return results
+        # BM25 关键词检索（始终可用）
+        bm25_results = bm25_manager.search(course_id, query, top_k=top_k)
+
+        # 向量检索（嵌入模型已配置时）
+        vector_results = []
+        if self._has_embedding(ai_config):
+            try:
+                from services.embedding_service import embedding_service
+                from services.vector_store import vector_store
+
+                query_embeddings = embedding_service.embed_texts([query], ai_config=ai_config)
+                if query_embeddings and query_embeddings[0]:
+                    vector_results = vector_store.search(
+                        course_id, query_embeddings[0], top_k=top_k, metadata_filter=metadata_filter
+                    )
+                    if vector_results:
+                        logger.info(f"[检索] 向量检索返回 {len(vector_results)} 条, BM25 {len(bm25_results)} 条 → RRF 融合")
+            except Exception as e:
+                logger.warning(f"[检索] 向量检索失败，降级到纯 BM25: {e}")
+
+        # 融合或单路返回
+        if vector_results and bm25_results:
+            return self._rrf_fusion(vector_results, bm25_results, top_k)
+        elif vector_results:
+            return vector_results[:top_k]
+        else:
+            return bm25_results
+
+    def _has_embedding(self, ai_config):
+        """检查是否配置了嵌入模型"""
+        if not ai_config:
+            return False
+        key = (ai_config.get('embedding_api_key') or '').strip()
+        url = (ai_config.get('embedding_api_url') or '').strip()
+        return bool(key and url)
 
     def _rrf_fusion(self, vector_results, bm25_results, top_k):
         """
@@ -90,11 +122,14 @@ class RetrievalService:
             if content in seen_contents:
                 continue
             seen_contents.add(content)
+            meta = item.get('metadata', {})
             fused_list.append({
                 'content': content,
                 'score': scores.get(key, 0),
                 'source': 'vector',
-                'metadata': item.get('metadata', {}),
+                'document_id': meta.get('document_id', ''),
+                'heading_path': meta.get('heading_path', ''),
+                'metadata': meta,
                 'chunk_id': key,
             })
 
@@ -109,6 +144,8 @@ class RetrievalService:
                 'content': content,
                 'score': scores.get(key, 0),
                 'source': 'bm25',
+                'document_id': str(item.get('document_id', '')),
+                'heading_path': item.get('heading_path', ''),
                 'metadata': {
                     'chunk_index': item.get('chunk_index'),
                     'document_id': str(item.get('document_id', '')),
