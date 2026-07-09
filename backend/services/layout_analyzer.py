@@ -2,8 +2,7 @@
 版面分析服务
 
 检测文档中的表格、图片、标题等区域，重建阅读顺序。
-- 有 PaddleOCR/PP-Structure 时使用其版面分析能力
-- 无 PaddleOCR 时使用 PyMuPDF 文本位置做规则分析
+使用 PyMuPDF 文本位置做规则分析。
 """
 import logging
 

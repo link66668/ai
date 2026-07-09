@@ -183,6 +183,10 @@ def send_message_stream(current_user, conv_id):
     history = Message.find_by_conversation(conv_id)
     history_list = [{'role': m['role'], 'content': m['content']} for m in history[-10:]]
 
+    # 获取用户AI配置
+    from models.user_ai_config import UserAIConfig
+    ai_config = UserAIConfig.get_effective_config(current_user['id'])
+
     # 调用 RAG 流式管线
     stream_gen = ai_service.chat_rag(
         message=content,
@@ -190,6 +194,7 @@ def send_message_stream(current_user, conv_id):
         conversation_history=history_list,
         temp_file_session_id=temp_file_session_id,
         stream=True,
+        ai_config=ai_config,
     )
 
     def generate():

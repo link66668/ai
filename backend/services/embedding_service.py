@@ -19,16 +19,16 @@ class EmbeddingService:
     """
 
     def __init__(self):
-        self._client = None
-        self._init_failed = False
+        self._clients = {}  # (api_url, api_key) → OpenAI client
         self._dimension = Config.EMBEDDING_DIMENSION
 
-    def embed_texts(self, texts):
+    def embed_texts(self, texts, ai_config=None):
         """
         批量文本向量化
 
         Args:
             texts: 文本列表
+            ai_config: 用户AI配置 dict（可选，含 embedding_api_key/url/model）
 
         Returns:
             list[list[float]]: 向量列表
@@ -38,37 +38,51 @@ class EmbeddingService:
 
         # 尝试 API
         try:
-            return self._embed_via_api(texts)
+            return self._embed_via_api(texts, ai_config)
         except Exception as e:
             logger.warning(f"[Embedding] API 嵌入失败: {e}，降级到哈希向量")
             return self._embed_hash(texts)
 
-    def embed_query(self, text):
+    def embed_query(self, text, ai_config=None):
         """
         查询文本向量化（单条）
         """
-        result = self.embed_texts([text])
+        result = self.embed_texts([text], ai_config=ai_config)
         return result[0] if result else []
 
-    def _embed_via_api(self, texts):
+    def _resolve(self, key, ai_config):
+        """从用户配置或系统默认中获取值"""
+        cfg = ai_config or {}
+        user_val = cfg.get(key, '')
+        if isinstance(user_val, str) and user_val.strip():
+            return user_val.strip()
+        return getattr(Config, key.upper(), '')
+
+    def _embed_via_api(self, texts, ai_config=None):
         """
         通过 OpenAI 兼容 Embeddings API 向量化
         """
         from openai import OpenAI
 
-        if self._client is None:
-            self._client = OpenAI(
-                base_url=Config.EMBEDDING_API_URL,
-                api_key=Config.EMBEDDING_API_KEY,
+        api_url = self._resolve('embedding_api_url', ai_config)
+        api_key = self._resolve('embedding_api_key', ai_config)
+        model = self._resolve('embedding_model', ai_config)
+
+        # 按 (url, key) 缓存客户端
+        cache_key = (api_url, api_key)
+        if cache_key not in self._clients:
+            self._clients[cache_key] = OpenAI(
+                base_url=api_url,
+                api_key=api_key,
                 timeout=30.0,
             )
             logger.info(
-                f"[Embedding] API 客户端已初始化: {Config.EMBEDDING_API_URL} "
-                f"model={Config.EMBEDDING_MODEL}"
+                f"[Embedding] API 客户端已初始化: {api_url} model={model}"
             )
 
-        response = self._client.embeddings.create(
-            model=Config.EMBEDDING_MODEL,
+        client = self._clients[cache_key]
+        response = client.embeddings.create(
+            model=model,
             input=texts,
         )
         embeddings = [item.embedding for item in response.data]

@@ -59,6 +59,7 @@ class AsyncPipeline:
         """
         from database import db
         from models.document import Document
+        from models.user_ai_config import UserAIConfig
 
         stages = [
             ('parsing', 0.0, 0.1),
@@ -78,11 +79,16 @@ class AsyncPipeline:
         file_path = doc['file_path']
         file_type = doc['file_type']
         course_id = doc['course_id']
+
+        # 获取文档所属用户的AI配置
+        user_id = doc.get('user_id')
+        ai_config = UserAIConfig.get_effective_config(user_id) if user_id else None
+
         retry_count = 0
 
         while retry_count <= Config.PROCESSING_RETRY_COUNT:
             try:
-                self._run_stages(doc_id, course_id, file_path, file_type, stages)
+                self._run_stages(doc_id, course_id, file_path, file_type, stages, ai_config)
                 # 成功
                 self._update_progress(doc_id, 'completed', 1.0)
                 self._log_stage(doc_id, 'completed', 'success',
@@ -101,7 +107,7 @@ class AsyncPipeline:
                 else:
                     time.sleep(2 * retry_count)  # 递增等待
 
-    def _run_stages(self, doc_id, course_id, file_path, file_type, stages):
+    def _run_stages(self, doc_id, course_id, file_path, file_type, stages, ai_config=None):
         """按顺序执行处理阶段"""
         from services.document_parser import DocumentParser
         from services.layout_analyzer import LayoutAnalyzer
@@ -117,7 +123,7 @@ class AsyncPipeline:
         self._update_stage(doc_id, 'parsing', 0.05)
         t0 = time.time()
         parser = DocumentParser()
-        parse_result = parser.parse(file_path, file_type)
+        parse_result = parser.parse(file_path, file_type, ai_config=ai_config)
         full_text = parse_result['text']
         pages = parse_result.get('pages', [full_text])
         metadata = parse_result['metadata']
@@ -136,7 +142,7 @@ class AsyncPipeline:
         if metadata.get('needs_ocr'):
             t0 = time.time()
             from services.vision_service import vision_service
-            ocr_text = vision_service.recognize(file_path)
+            ocr_text = vision_service.recognize(file_path, ai_config=ai_config)
             engine = vision_service.get_active_engine_name()
             if ocr_text:
                 full_text = ocr_text
@@ -186,7 +192,7 @@ class AsyncPipeline:
         self._update_stage(doc_id, 'embedding', 0.8)
         t0 = time.time()
         chunk_texts = [c['content'] for c in chunks]
-        embeddings = embedding_service.embed_texts(chunk_texts)
+        embeddings = embedding_service.embed_texts(chunk_texts, ai_config=ai_config)
         msg = f'嵌入完成, {len(embeddings)} 个向量, {embedding_service.get_dimension()}维'
         self._log_stage(doc_id, 'embedding', 'success',
                         msg, int((time.time() - t0) * 1000))

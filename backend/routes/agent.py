@@ -20,12 +20,17 @@ def chat(current_user):
     course_id = data.get('course_id')
     temp_file_session_id = data.get('temp_file_session_id')
 
+    # 获取用户AI配置
+    from models.user_ai_config import UserAIConfig
+    ai_config = UserAIConfig.get_effective_config(current_user['id'])
+
     # 使用 RAG 增强对话
     result = ai_service.chat_rag(
         message=message,
         course_id=course_id,
         temp_file_session_id=temp_file_session_id,
         stream=False,
+        ai_config=ai_config,
     )
     return success_response(result)
 
@@ -101,5 +106,8 @@ def decompose_task(current_user):
     if not task_title:
         return error_response('任务标题不能为空')
 
-    result = ai_service.decompose_task(task_title, description, total_days)
+    from models.user_ai_config import UserAIConfig
+    ai_config = UserAIConfig.get_effective_config(current_user['id'])
+
+    result = ai_service.decompose_task(task_title, description, total_days, ai_config=ai_config)
     return success_response({'subtasks': result})

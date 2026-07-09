@@ -137,6 +137,39 @@ class Database:
                 )
             ''')
 
+            # 用户AI配置表（每个用户独立的AI设置）
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS user_ai_config (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER UNIQUE NOT NULL,
+
+                    -- 对话模型
+                    ai_api_key TEXT DEFAULT '',
+                    ai_api_url TEXT DEFAULT '',
+                    ai_model TEXT DEFAULT '',
+                    use_real_llm INTEGER DEFAULT 1,
+
+                    -- 嵌入模型
+                    embedding_api_key TEXT DEFAULT '',
+                    embedding_api_url TEXT DEFAULT '',
+                    embedding_model TEXT DEFAULT '',
+
+                    -- 识图模型
+                    vision_api_key TEXT DEFAULT '',
+                    vision_api_url TEXT DEFAULT '',
+                    vision_model TEXT DEFAULT '',
+                    vision_enabled INTEGER DEFAULT 1,
+
+                    -- 文档处理（MinerU 等）
+                    doc_api_key TEXT DEFAULT '',
+                    doc_api_url TEXT DEFAULT '',
+                    doc_model TEXT DEFAULT 'vlm',
+
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+                )
+            ''')
+
             # ========== 全格式文档引擎 + RAG 新增表 ==========
 
             # 文档分块表

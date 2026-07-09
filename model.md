@@ -1,0 +1,26 @@
+
+
+
+
+#各大模型 
+## 对话模型 
+API地址：https://dashscope.aliyuncs.com/compatible-mode/v1
+API密钥：sk-ws-H.RYHLPIP.VEv9.MEUCIHjKjWJr-CJkFNGxhCWHJHNyAEivDmpo5cxc16IIbKXtAiEAqQy9HBy9NPjQJ7AcWH2UZKNzFra0K88D8zodkKSVwTY
+模型：qwen3.7-plus
+
+## 视觉模型
+API地址：https://dashscope.aliyuncs.com/compatible-mode/v1
+API密钥：sk-ws-H.RYHLPIP.VEv9.MEUCIHjKjWJr-CJkFNGxhCWHJHNyAEivDmpo5cxc16IIbKXtAiEAqQy9HBy9NPjQJ7AcWH2UZKNzFra0K88D8zodkKSVwTY
+模型：qwen3.7-plus
+
+## 嵌入模型 
+API地址：https://dashscope.aliyuncs.com/compatible-mode/v1
+API密钥：sk-ws-H.RYHLPIP.VEv9.MEUCIHjKjWJr-CJkFNGxhCWHJHNyAEivDmpo5cxc16IIbKXtAiEAqQy9HBy9NPjQJ7AcWH2UZKNzFra0K88D8zodkKSVwTY
+模型：text-embedding-v4
+
+
+## 文档处理模型MinerU
+
+API地址：https://mineru.net
+API密钥：eyJ0eXBlIjoiSldUIiwiYWxnIjoiSFM1MTIifQ.eyJqdGkiOiI0NTgwMDIwMCIsInJvbCI6IlJPTEVfUkVHSVNURVIiLCJpc3MiOiJPcGVuWExhYiIsImlhdCI6MTc4MjMyNjI2NywiY2xpZW50SWQiOiJsa3pkeDU3bnZ5MjJqa3BxOXgydyIsInBob25lIjoiIiwib3BlbklkIjpudWxsLCJ1dWlkIjoiNGMwZTYxZDgtY2ViZC00MTM3LWE1MDUtMTE2MTdlMTFhY2NhIiwiZW1haWwiOiIiLCJleHAiOjE3OTAxMDIyNjd9.2IcaWOM8wkF99y5NuNFrlXga0D4FQgbYPXECWNGQfgnvv7IRrKOAl2LWaGu4vt1_jO6cnCVSTrAnPaEtqvxGBg
+模型：MinerU

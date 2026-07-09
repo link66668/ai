@@ -349,17 +349,20 @@ class LightweightParser:
     MAX_FILE_SIZE = 100 * 1024 * 1024  # 100MB
     MAX_PDF_PAGES = 50                 # PDF 最大读取页数
 
-    def parse(self, file_path, file_type=None):
+    def parse(self, file_path, file_type=None, ai_config=None):
         """
         轻量解析文件，返回纯文本
 
         Args:
             file_path: 文件路径
             file_type: 文件类型（可选）
+            ai_config: 用户AI配置（可选，用于视觉模型调用）
 
         Returns:
             str: 提取的纯文本内容
         """
+        self._ai_config = ai_config  # 供内部方法（如 _parse_image_light）使用
+
         if file_type is None:
             file_type = os.path.splitext(file_path)[1].lower().lstrip('.')
 
@@ -455,7 +458,7 @@ class LightweightParser:
         处理纯图片型 PPTX（如 PDF 转 PPTX、扫描件等）：
         - 每页幻灯片仅包含背景图片，无文字形状
         - 从 ZIP 中提取图片 → 批量调用 Vision API → 并发处理
-        - Vision API 不可用时自动降级到本地 OCR
+        - Vision API 不可用时返回识别失败提示
         """
         import zipfile
         import os
@@ -542,7 +545,7 @@ class LightweightParser:
                 # ---- 第 2 遍：批量调用 Vision API（并发） ----
                 if all_img_paths:
                     from services.vision_service import vision_service
-                    all_results = vision_service.describe_images(all_img_paths)
+                    all_results = vision_service.describe_images(all_img_paths, ai_config=ai_config)
                     # 建立 path → result 映射
                     path_to_text = dict(zip(all_img_paths, all_results))
                 else:
@@ -599,7 +602,7 @@ class LightweightParser:
         """轻量图片解析 —— 调用视觉模型 API"""
         try:
             from services.vision_service import vision_service
-            text = vision_service.recognize(file_path)
+            text = vision_service.recognize(file_path, ai_config=getattr(self, '_ai_config', None))
             return f'（以下内容已通过视觉识别从图片中提取，请直接阅读和使用：）\n\n{text}'
         except Exception as e:
             return f"[图片识别失败: {str(e)}]"

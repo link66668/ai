@@ -409,6 +409,37 @@ class ApiClient {
     async reprocessDocument(docId) {
         return this.post(`/documents/${docId}/reprocess`);
     }
+
+    // ========== AI 配置 ==========
+
+    /**
+     * 获取当前用户的AI配置
+     */
+    async getAiConfig() {
+        return this.get('/ai-config/');
+    }
+
+    /**
+     * 更新AI配置
+     */
+    async updateAiConfig(data) {
+        return this.put('/ai-config/', data);
+    }
+
+    /**
+     * 重置为系统默认配置
+     */
+    async resetAiConfig() {
+        return this.delete('/ai-config/');
+    }
+
+    /**
+     * 测试AI配置连接
+     * @param {string} type - 模型类型: 'chat' | 'embedding' | 'vision' | 'doc'
+     */
+    async testAiConfig(type = 'chat') {
+        return this.post('/ai-config/test', { type });
+    }
 }
 
 const api = new ApiClient();

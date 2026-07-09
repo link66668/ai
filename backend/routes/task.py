@@ -145,9 +145,13 @@ def decompose_task(current_user, task_id):
         return error_response('无权访问', 403)
 
     # 调用AI分解任务
+    from models.user_ai_config import UserAIConfig
+    ai_config = UserAIConfig.get_effective_config(current_user['id'])
+
     subtasks_data = ai_service.decompose_task(
         task['title'],
-        task.get('description', '')
+        task.get('description', ''),
+        ai_config=ai_config,
     )
 
     # 创建子任务

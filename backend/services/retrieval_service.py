@@ -38,7 +38,7 @@ class RetrievalService:
         except Exception:
             return len(text) // 2
 
-    def hybrid_search(self, course_id, query, top_k=10, metadata_filter=None):
+    def hybrid_search(self, course_id, query, top_k=10, metadata_filter=None, ai_config=None):
         """
         混合检索：向量 + BM25 → RRF 融合
 
@@ -47,6 +47,7 @@ class RetrievalService:
             query: 查询文本
             top_k: 返回结果数
             metadata_filter: 元数据过滤条件
+            ai_config: 用户AI配置 dict（可选）
 
         Returns:
             list[dict]: 排序后的检索结果
@@ -56,7 +57,7 @@ class RetrievalService:
         from services.bm25_manager import bm25_manager
 
         # 1. 向量检索
-        query_embedding = embedding_service.embed_query(query)
+        query_embedding = embedding_service.embed_query(query, ai_config=ai_config)
         vector_results = vector_store.search(
             course_id, query_embedding, top_k=top_k * 2,
             metadata_filter=metadata_filter
@@ -133,7 +134,7 @@ class RetrievalService:
         return fused_list[:top_k]
 
     def build_rag_context(self, course_id, query, temp_file_text='',
-                          conversation_history=None, top_k=8):
+                          conversation_history=None, top_k=8, ai_config=None):
         """
         构建完整的 RAG 上下文
 
@@ -158,7 +159,7 @@ class RetrievalService:
 
         # 1. 课程知识库检索
         if course_id:
-            search_results = self.hybrid_search(course_id, query, top_k=top_k)
+            search_results = self.hybrid_search(course_id, query, top_k=top_k, ai_config=ai_config)
 
             if search_results:
                 context_parts.append('【课程资料】')

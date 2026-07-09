@@ -29,10 +29,7 @@ markdown>=3.5.2            # Markdown解析
 beautifulsoup4>=4.12.3     # HTML解析
 lxml>=5.1.0                # 快速HTML/XML解析器
 
-# OCR引擎（可选——安装失败不影响核心功能，系统会自动降级）
-# paddlepaddle==3.0.0       # PaddleOCR深度学习框架 (CPU版) — Python 3.13 需手动安装
-# paddleocr==2.9.0          # 中文OCR首选 — Python 3.13 需手动安装
-easyocr>=1.7.2             # OCR降级方案（纯pip，CPU友好）
+# OCR引擎已移除（统一使用视觉模型 API 识图）
 
 # AI与嵌入
 openai>=1.12.0             # DeepSeek API + MaaS 嵌入/视觉（OpenAI兼容）

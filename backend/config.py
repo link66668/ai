@@ -13,7 +13,7 @@ class Config:
     )
 
     # JWT配置
-    SECRET_KEY = os.environ.get('SECRET_KEY', '')
+    SECRET_KEY = os.environ.get('SECRET_KEY', '') or 'dev-default-secret-key-change-me'
     JWT_EXPIRATION_HOURS = 24
 
     # 文件上传配置

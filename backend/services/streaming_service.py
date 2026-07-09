@@ -37,7 +37,7 @@ class StreamingService:
         """检查是否已中断"""
         return conversation_id in _interrupted_conversations
 
-    def stream_chat(self, messages, conversation_id=None, temperature=0.7):
+    def stream_chat(self, messages, conversation_id=None, temperature=0.7, ai_config=None):
         """
         SSE 流式聊天生成器
 
@@ -45,21 +45,25 @@ class StreamingService:
             messages: LLM 消息列表
             conversation_id: 对话 ID（用于中断检测）
             temperature: 温度参数
+            ai_config: 用户AI配置 dict（可选，含 ai_api_key/ai_api_url/ai_model/use_real_llm）
 
         Yields:
             str: SSE 格式的事件数据
         """
-        if not Config.STREAMING_ENABLED or not Config.USE_REAL_LLM:
+        cfg = ai_config or {}
+        use_real_llm = cfg.get('use_real_llm', Config.USE_REAL_LLM)
+
+        if not Config.STREAMING_ENABLED or not use_real_llm:
             # 降级到伪流式
-            yield from self._fallback_blocking(messages, conversation_id)
+            yield from self._fallback_blocking(messages, conversation_id, ai_config)
             return
 
         try:
             from openai import OpenAI
 
             client = OpenAI(
-                base_url=Config.AI_API_URL,
-                api_key=Config.AI_API_KEY,
+                base_url=cfg.get('ai_api_url') or Config.AI_API_URL,
+                api_key=cfg.get('ai_api_key') or Config.AI_API_KEY,
                 timeout=90.0,
             )
 
@@ -68,7 +72,7 @@ class StreamingService:
                 self.clear_interrupted(conversation_id)
 
             stream = client.chat.completions.create(
-                model=Config.AI_MODEL,
+                model=cfg.get('ai_model') or Config.AI_MODEL,
                 messages=messages,
                 stream=True,
                 temperature=temperature,
@@ -108,28 +112,31 @@ class StreamingService:
             # 降级到伪流式
             yield from self._fallback_blocking(messages, conversation_id)
 
-    def blocking_chat(self, messages, temperature=0.7):
+    def blocking_chat(self, messages, temperature=0.7, ai_config=None):
         """
         阻塞模式聊天（非流式）
 
         Args:
             messages: LLM 消息列表
             temperature: 温度参数
+            ai_config: 用户AI配置 dict（可选）
 
         Returns:
             str: 完整回复文本
         """
+        cfg = ai_config or {}
+
         try:
             from openai import OpenAI
 
             client = OpenAI(
-                base_url=Config.AI_API_URL,
-                api_key=Config.AI_API_KEY,
+                base_url=cfg.get('ai_api_url') or Config.AI_API_URL,
+                api_key=cfg.get('ai_api_key') or Config.AI_API_KEY,
                 timeout=90.0,
             )
 
             response = client.chat.completions.create(
-                model=Config.AI_MODEL,
+                model=cfg.get('ai_model') or Config.AI_MODEL,
                 messages=messages,
                 stream=False,
                 temperature=temperature,
@@ -179,12 +186,12 @@ class StreamingService:
             'full_response': text,
         })
 
-    def _fallback_blocking(self, messages, conversation_id=None):
+    def _fallback_blocking(self, messages, conversation_id=None, ai_config=None):
         """
         降级方案：阻塞模式 + 伪流式输出
         """
         try:
-            response_text = self.blocking_chat(messages)
+            response_text = self.blocking_chat(messages, ai_config=ai_config)
             yield from self.pseudo_stream(response_text, conversation_id)
         except Exception as e:
             yield self._sse_event({

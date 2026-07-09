@@ -210,7 +210,7 @@ class AIService:
         plan['daily_schedule'] = daily_plan
         return plan
 
-    def decompose_task(self, task_title, description='', total_days=7):
+    def decompose_task(self, task_title, description='', total_days=7, ai_config=None):
         """任务分解 - 增强版：支持自然语言智能拆解，含多课程编排"""
         from datetime import datetime, timedelta
 
@@ -226,7 +226,8 @@ class AIService:
                 parsed['course_names'],
                 parsed.get('goal_type', '复习'),
                 total_days,
-                parsed.get('daily_hours', 2.0)
+                parsed.get('daily_hours', 2.0),
+                ai_config=ai_config,
             )
 
         # 单课程智能拆解
@@ -235,7 +236,8 @@ class AIService:
                 parsed['course_names'][0],
                 parsed.get('goal_type', '复习'),
                 total_days,
-                parsed.get('daily_hours', 2.0)
+                parsed.get('daily_hours', 2.0),
+                ai_config=ai_config,
             )
 
         subtasks = []
@@ -393,11 +395,11 @@ class AIService:
         except Exception:
             return []
 
-    def _generate_smart_subtasks(self, course_name, goal_type, total_days, daily_hours=2.0):
+    def _generate_smart_subtasks(self, course_name, goal_type, total_days, daily_hours=2.0, ai_config=None):
         """生成智能阶段+每日任务拆解 - LLM优先，Mock兜底"""
         from datetime import datetime, timedelta
 
-        llm_plan = self._llm_generate_task_plan(course_name, goal_type, total_days, daily_hours)
+        llm_plan = self._llm_generate_task_plan(course_name, goal_type, total_days, daily_hours, ai_config=ai_config)
         if llm_plan:
             subtasks = []
             current_date = datetime.now()
@@ -632,9 +634,11 @@ class AIService:
         else:
             return f'{course_name}学习任务（第{day_in_phase}天）'
 
-    def _llm_generate_task_plan(self, course_name, goal_type, total_days, daily_hours):
+    def _llm_generate_task_plan(self, course_name, goal_type, total_days, daily_hours, ai_config=None):
         """调用大模型生成详细任务规划，失败返回 None"""
-        if not Config.USE_REAL_LLM:
+        cfg = ai_config or {}
+        use_real_llm = cfg.get('use_real_llm', Config.USE_REAL_LLM)
+        if not use_real_llm:
             return None
 
         from datetime import datetime
@@ -671,7 +675,7 @@ class AIService:
             }
         ]
 
-        response = self._call_llm(messages, temperature=0.5, max_tokens=4096)
+        response = self._call_llm(messages, temperature=0.5, max_tokens=4096, ai_config=ai_config)
         if not response:
             return None
 
@@ -717,17 +721,22 @@ class AIService:
 - description 要给出操作指南（如"先阅读教材第二章，重点理解ε-δ定义，然后完成课后习题2.1-2.3"）
 - suggested_hours 是建议学习时长，可为浮点数"""
 
-    def _call_llm(self, messages, temperature=0.7, max_tokens=4096):
+    def _call_llm(self, messages, temperature=0.7, max_tokens=4096, ai_config=None):
         """调用 DeepSeek API"""
+        cfg = ai_config or {}
+        api_url = cfg.get('ai_api_url') or Config.AI_API_URL
+        api_key = cfg.get('ai_api_key') or Config.AI_API_KEY
+        model = cfg.get('ai_model') or Config.AI_MODEL
+
         try:
             resp = requests.post(
-                f"{Config.AI_API_URL}/v1/chat/completions",
+                f"{api_url}/chat/completions",
                 headers={
-                    "Authorization": f"Bearer {Config.AI_API_KEY}",
+                    "Authorization": f"Bearer {api_key}",
                     "Content-Type": "application/json"
                 },
                 json={
-                    "model": Config.AI_MODEL,
+                    "model": model,
                     "messages": messages,
                     "temperature": temperature,
                     "max_tokens": max_tokens
@@ -795,11 +804,11 @@ class AIService:
             print(f"[LLM] Parse error: {e}")
             return None
 
-    def _generate_multi_course_smart_subtasks(self, course_names, goal_type, total_days, daily_hours=2.0):
+    def _generate_multi_course_smart_subtasks(self, course_names, goal_type, total_days, daily_hours=2.0, ai_config=None):
         """多课程智能编排 - LLM优先，Mock兜底，按日课表输出"""
         from datetime import datetime, timedelta
 
-        llm_plan = self._llm_generate_multi_course_plan(course_names, goal_type, total_days, daily_hours)
+        llm_plan = self._llm_generate_multi_course_plan(course_names, goal_type, total_days, daily_hours, ai_config=ai_config)
         if llm_plan:
             subtasks = []
             current_date = datetime.now()
@@ -920,9 +929,11 @@ class AIService:
             t['order'] = i + 1
         return subtasks
 
-    def _llm_generate_multi_course_plan(self, course_names, goal_type, total_days, daily_hours):
+    def _llm_generate_multi_course_plan(self, course_names, goal_type, total_days, daily_hours, ai_config=None):
         """调用 LLM 生成多课程日课表，失败返回 None"""
-        if not Config.USE_REAL_LLM:
+        cfg = ai_config or {}
+        use_real_llm = cfg.get('use_real_llm', Config.USE_REAL_LLM)
+        if not use_real_llm:
             return None
 
         from datetime import datetime
@@ -957,7 +968,7 @@ class AIService:
 请严格按照JSON格式输出。"""},
         ]
 
-        response = self._call_llm(messages, temperature=0.4, max_tokens=8192)
+        response = self._call_llm(messages, temperature=0.4, max_tokens=8192, ai_config=ai_config)
         if not response:
             return None
 
@@ -1061,7 +1072,7 @@ class AIService:
     # ========== RAG + 流式对话 ==========
 
     def chat_rag(self, message, course_id=None, conversation_history=None,
-                 temp_file_session_id=None, stream=False):
+                 temp_file_session_id=None, stream=False, ai_config=None):
         """
         RAG 增强对话（替代 chat() 的新引擎）
 
@@ -1101,6 +1112,7 @@ class AIService:
                 query=message,
                 temp_file_text=temp_text,
                 conversation_history=conversation_history,
+                ai_config=ai_config,
             )
 
             if stream:
@@ -1113,6 +1125,7 @@ class AIService:
                         for event in streaming_service.stream_chat(
                             rag_result['messages'],
                             conversation_id=None,
+                            ai_config=ai_config,
                         ):
                             yield event
                     except Exception as e:
@@ -1120,7 +1133,8 @@ class AIService:
                         print(f"[RAG] 流式调用失败，降级到阻塞模式: {e}")
                         try:
                             response_text = streaming_service.blocking_chat(
-                                rag_result['messages']
+                                rag_result['messages'],
+                                ai_config=ai_config,
                             )
                             for event in streaming_service.pseudo_stream(response_text):
                                 yield event
@@ -1139,7 +1153,8 @@ class AIService:
                 try:
                     from services.streaming_service import streaming_service
                     response_text = streaming_service.blocking_chat(
-                        rag_result['messages']
+                        rag_result['messages'],
+                        ai_config=ai_config,
                     )
                     return {
                         'response': response_text,
