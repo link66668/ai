@@ -6,319 +6,365 @@
     <title>AI 配置 - 课程学习助手</title>
     <link rel="stylesheet" href="css/style.css">
     <style>
-        .config-section { margin-bottom: 24px; }
-        .config-section .card-header { display: flex; align-items: center; justify-content: space-between; }
-        .config-section .section-icon { font-size: 20px; margin-right: 8px; }
-        .config-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-        .config-grid .form-group.full-width { grid-column: 1 / -1; }
-        @media (max-width: 768px) { .config-grid { grid-template-columns: 1fr; } }
-        .test-btn { white-space: nowrap; }
+        .config-page { max-width: 720px; margin: 0 auto; padding: 24px; }
+        .config-page .topbar { margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between; }
+
+        .provider-card {
+            border: 1px solid var(--gray-200);
+            border-radius: 10px;
+            padding: 16px;
+            margin-bottom: 12px;
+            background: #fff;
+            transition: box-shadow .15s;
+        }
+        .provider-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,.06); }
+
+        .provider-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 12px;
+        }
+        .provider-header-left {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .provider-name { font-weight: 600; font-size: 15px; color: var(--gray-800); }
+        .provider-type-badge {
+            display: inline-block;
+            font-size: 10px;
+            font-weight: 600;
+            padding: 1px 8px;
+            border-radius: 10px;
+            background: var(--gray-100);
+            color: var(--gray-500);
+        }
+        .provider-status-dot {
+            display: inline-block;
+            width: 8px; height: 8px;
+            border-radius: 50%;
+            margin-right: 6px;
+        }
+        .provider-status-dot.on  { background: #22c55e; }
+        .provider-status-dot.off { background: var(--gray-300); }
+
+        .provider-fields {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+        .provider-fields .field-full { grid-column: 1 / -1; }
+        .provider-fields label {
+            display: block;
+            font-size: 11px;
+            color: var(--gray-500);
+            margin-bottom: 2px;
+        }
+        .provider-fields .input-wrap {
+            position: relative;
+        }
+        .provider-fields .input-wrap .toggle-key {
+            position: absolute;
+            right: 6px; top: 50%;
+            transform: translateY(-50%);
+            background: none;
+            border: none;
+            cursor: pointer;
+            color: var(--gray-400);
+            padding: 2px 4px;
+            font-size: 13px;
+            line-height: 1;
+        }
+        .provider-fields .input-wrap .toggle-key:hover { color: var(--gray-600); }
+        .provider-fields input, .provider-fields select {
+            width: 100%;
+            padding: 6px 10px;
+            font-size: 13px;
+            border: 1px solid var(--gray-200);
+            border-radius: 6px;
+            outline: none;
+            box-sizing: border-box;
+        }
+        .provider-fields input:focus, .provider-fields select:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 2px rgba(79,70,229,.12);
+        }
+
+        .provider-actions {
+            display: flex;
+            gap: 8px;
+            margin-top: 12px;
+            padding-top: 10px;
+            border-top: 1px solid var(--gray-100);
+        }
+        .test-result-box {
+            margin-top: 8px;
+            padding: 6px 10px;
+            border-radius: 6px;
+            font-size: 12px;
+            display: none;
+        }
+        .test-result-box.success { display: block; background: #f0fdf4; color: #166534; }
+        .test-result-box.error   { display: block; background: #fef2f2; color: #991b1b; }
+
+        .save-bar {
+            display: flex;
+            gap: 10px;
+            margin-top: 24px;
+            padding: 16px 0;
+        }
+        @media (max-width: 600px) {
+            .provider-fields { grid-template-columns: 1fr; }
+            .config-page { padding: 12px; }
+        }
     </style>
 </head>
 <body>
-    <div class="page-wrapper">
-        <!-- 侧边栏 -->
-        <aside class="sidebar">
-            <div class="sidebar-header"><h2>📚 学习助手</h2></div>
-            <nav class="sidebar-nav">
-                <a href="/dashboard.html" class="nav-item"><span class="icon">🏠</span> 仪表盘</a>
-                <a href="/courses.html" class="nav-item"><span class="icon">📖</span> 课程管理</a>
-                <a href="/chat.html" class="nav-item"><span class="icon">💬</span> Agent对话</a>
-                <a href="/tasks.html" class="nav-item"><span class="icon">✅</span> 任务管理</a>
-                <a href="/ai_settings.html" class="nav-item active"><span class="icon">🤖</span> AI 配置</a>
-                <a href="/profile.html" class="nav-item"><span class="icon">👤</span> 个人中心</a>
-            </nav>
-            <div class="sidebar-footer">
-                <button class="btn btn-outline btn-block" onclick="logout()">退出登录</button>
-            </div>
-        </aside>
+<div class="page-wrapper">
+    <aside class="sidebar">
+        <div class="sidebar-header"><h2>📚 学习助手</h2></div>
+        <nav class="sidebar-nav">
+            <a href="/dashboard.html" class="nav-item"><span class="icon">🏠</span> 仪表盘</a>
+            <a href="/courses.html" class="nav-item"><span class="icon">📖</span> 课程管理</a>
+            <a href="/chat.html" class="nav-item"><span class="icon">💬</span> Agent对话</a>
+            <a href="/tasks.html" class="nav-item"><span class="icon">✅</span> 任务管理</a>
+            <a href="/ai_settings.html" class="nav-item active"><span class="icon">🤖</span> AI 配置</a>
+            <a href="/profile.html" class="nav-item"><span class="icon">👤</span> 个人中心</a>
+        </nav>
+        <div class="sidebar-footer">
+            <button class="btn btn-outline btn-block" onclick="logout()">退出登录</button>
+        </div>
+    </aside>
 
-        <!-- 主内容 -->
-        <main class="main-content">
+    <main class="main-content">
+        <div class="config-page">
             <div class="topbar">
                 <h1>🤖 AI 配置</h1>
-                <div class="topbar-actions">
-                    <span class="badge" id="configStatusBadge">加载中...</span>
-                </div>
+                <span class="badge" id="configBadge">系统默认</span>
             </div>
 
             <!-- 提示 -->
             <div class="card mb-3">
-                <div class="card-body" style="background: #e8f4fd; border-left: 4px solid var(--primary, #4a90d9);">
-                    <p style="margin: 0; color: #555;">
-                        💡 在此配置您自己的模型参数。所有 AI 功能将使用您的配置，未配置的项将使用系统默认值。
+                <div class="card-body" style="background:#f0f4ff;border-left:4px solid var(--primary);padding:12px 16px;">
+                    <p style="margin:0;font-size:13px;color:var(--gray-600);">
+                        💡 在此配置您的模型参数。未配置的项将使用<strong>系统默认值</strong>。
                     </p>
                 </div>
             </div>
 
-            <!-- ① 对话模型 -->
-            <div class="config-section">
-                <div class="card">
-                    <div class="card-header">
-                        <h3><span class="section-icon">💬</span>对话模型</h3>
-                        <button class="btn btn-outline btn-sm test-btn" onclick="testModel('chat')">🔗 测试</button>
-                    </div>
-                    <div class="card-body">
-                        <p class="form-text" style="margin-bottom: 16px;">用于 AI 对话问答、任务分解、学习计划生成等核心功能。支持所有 OpenAI 兼容 API。</p>
-                        <div class="config-grid">
-                            <div class="form-group">
-                                <label class="form-label">API 地址</label>
-                                <input type="url" class="form-control" id="aiApiUrl" placeholder="https://api.deepseek.com">
-                            </div>
-                            <div class="form-group">
-                                <label class="form-label">模型名称</label>
-                                <input type="text" class="form-control" id="aiModel" placeholder="deepseek-chat">
-                            </div>
-                            <div class="form-group full-width">
-                                <label class="form-label">API Key</label>
-                                <input type="password" class="form-control" id="aiApiKey" placeholder="sk-...">
-                            </div>
-                            <div class="form-group">
-                                <label class="form-check">
-                                    <input type="checkbox" id="useRealLlm" checked>
-                                    <span>启用真实模型（关闭则使用 Mock 模式）</span>
-                                </label>
-                            </div>
-                        </div>
-                        <div id="testResult_chat" class="test-result" style="display:none;"></div>
+            <!-- Provider 卡片列表 -->
+            <div id="providerList"></div>
+
+            <!-- 保存栏 -->
+            <div class="save-bar">
+                <button class="btn btn-primary" onclick="saveConfig()">💾 保存配置</button>
+                <button class="btn btn-danger" onclick="resetConfig()">🔄 恢复默认</button>
+            </div>
+        </div>
+    </main>
+</div>
+
+<script src="js/api.js"></script>
+<script src="js/utils.js"></script>
+<script>
+if (!checkAuth()) throw new Error('未登录');
+
+const PROVIDER_META = {
+    chat:     { icon: '💬', label: '对话模型', desc: 'AI 对话、任务分解等核心功能', testType: 'chat' },
+    embedding:{ icon: '📐', label: '嵌入模型', desc: '文档向量化与知识库检索',      testType: 'embedding' },
+    vision:   { icon: '👁️', label: '识图模型', desc: 'OCR 辅助、图表识别等',         testType: 'vision' },
+    doc:      { icon: '📄', label: '文档处理', desc: 'MinerU 等文档解析服务',        testType: 'doc' },
+};
+
+// 厂商预设：选择后自动填充 API 地址和默认模型
+const VENDORS = {
+    '':        { name: '—— 选择厂商 ——' },
+    'deepseek':{ name: 'DeepSeek', chat: { url: 'https://api.deepseek.com', model: 'deepseek-chat' } },
+    'openai':  { name: 'OpenAI', chat: { url: 'https://api.openai.com/v1', model: 'gpt-4o' },
+                               embedding: { url: 'https://api.openai.com/v1', model: 'text-embedding-3-small' },
+                               vision: { url: 'https://api.openai.com/v1', model: 'gpt-4o' } },
+    'dashscope':{ name: '阿里通义千问 (DashScope)', chat: { url: 'https://dashscope.aliyuncs.com/compatible-mode/v1', model: 'qwen-plus' },
+                               embedding: { url: 'https://dashscope.aliyuncs.com/compatible-mode/v1', model: 'text-embedding-v3' },
+                               vision: { url: 'https://dashscope.aliyuncs.com/compatible-mode/v1', model: 'qwen-vl-max' } },
+    'siliconflow':{ name: 'SiliconFlow (硅基流动)', chat: { url: 'https://api.siliconflow.cn/v1', model: 'Pro/deepseek-ai/DeepSeek-V3' },
+                               embedding: { url: 'https://api.siliconflow.cn/v1', model: 'BAAI/bge-m3' },
+                               vision: { url: 'https://api.siliconflow.cn/v1', model: 'deepseek-ai/deepseek-vl2' } },
+    'zhipu':   { name: '智谱 (ZhiPu)', chat: { url: 'https://open.bigmodel.cn/api/paas/v4', model: 'glm-4-plus' },
+                               embedding: { url: 'https://open.bigmodel.cn/api/paas/v4', model: 'embedding-3' },
+                               vision: { url: 'https://open.bigmodel.cn/api/paas/v4', model: 'glm-4v-plus' } },
+    'moonshot':{ name: '月之暗面 (Moonshot)', chat: { url: 'https://api.moonshot.cn/v1', model: 'moonshot-v1-8k' } },
+    'deepinfra':{name: 'DeepInfra', chat: { url: 'https://api.deepinfra.com/v1/openai', model: 'meta-llama/Meta-Llama-3.1-70B-Instruct' },
+                               embedding: { url: 'https://api.deepinfra.com/v1/openai', model: 'BAAI/bge-m3' } },
+    'groq':    { name: 'Groq', chat: { url: 'https://api.groq.com/openai/v1', model: 'llama-3.3-70b-versatile' } },
+    'together':{ name: 'Together AI', chat: { url: 'https://api.together.xyz/v1', model: 'meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo' },
+                               embedding: { url: 'https://api.together.xyz/v1', model: 'togethercomputer/m2-bert-80M-8k-retrieval' } },
+};
+
+// 文档处理厂商
+const DOC_VENDORS = {
+    '':          { name: '—— 选择服务商 ——' },
+    'mineru':    { name: 'MinerU 官方', url: 'https://mineru.net', model: 'vlm' },
+    'mineru-cn': { name: 'MinerU 中文站', url: 'https://mineru.com.cn', model: 'vlm' },
+};
+
+let providers = [];
+let showKeys = {};
+
+function getVendorsForType(type) {
+    if (type === 'doc') return DOC_VENDORS;
+    return VENDORS;
+}
+
+function renderProviders() {
+    const container = document.getElementById('providerList');
+    container.innerHTML = providers.map(p => {
+        const meta = PROVIDER_META[p.type] || {};
+        const vendors = getVendorsForType(p.type);
+        const vendorOptions = Object.entries(vendors).map(([k, v]) =>
+            `<option value="${k}" ${p.vendor === k ? 'selected' : ''}>${v.name}</option>`
+        ).join('');
+        return `
+        <div class="provider-card">
+            <div class="provider-header">
+                <div class="provider-header-left">
+                    <span class="provider-status-dot ${p.enabled !== false ? 'on' : 'off'}"></span>
+                    <span class="provider-name">${meta.icon || ''} ${meta.label || p.type}</span>
+                    <span class="provider-type-badge">${p.type}</span>
+                </div>
+                <label style="font-size:12px;color:var(--gray-500);display:flex;align-items:center;gap:4px;cursor:pointer;">
+                    <input type="checkbox" ${p.enabled !== false ? 'checked' : ''}
+                           onchange="toggleProvider('${p.id}', this.checked)">
+                    启用
+                </label>
+            </div>
+            <p style="margin:0 0 10px;font-size:12px;color:var(--gray-500);">${meta.desc || ''}</p>
+            <div class="provider-fields">
+                <div class="field-full">
+                    <label>厂商</label>
+                    <select onchange="selectVendor('${p.id}', this.value)">
+                        ${vendorOptions}
+                    </select>
+                </div>
+                <div class="field-full">
+                    <label>API Key</label>
+                    <div class="input-wrap">
+                        <input type="${showKeys[p.id] ? 'text' : 'password'}"
+                               value="${escapeHtml(p.api_key || '')}"
+                               oninput="updateField('${p.id}', 'api_key', this.value)"
+                               placeholder="sk-...">
+                        <button class="toggle-key" onclick="toggleKey('${p.id}')">${showKeys[p.id] ? '🙈' : '👁️'}</button>
                     </div>
                 </div>
-            </div>
-
-            <!-- ② 嵌入模型 -->
-            <div class="config-section">
-                <div class="card">
-                    <div class="card-header">
-                        <h3><span class="section-icon">📐</span>嵌入模型</h3>
-                        <button class="btn btn-outline btn-sm test-btn" onclick="testModel('embedding')">🔗 测试</button>
-                    </div>
-                    <div class="card-body">
-                        <p class="form-text" style="margin-bottom: 16px;">用于文档向量化和知识库检索。上传课程资料时自动调用。</p>
-                        <div class="config-grid">
-                            <div class="form-group">
-                                <label class="form-label">API 地址</label>
-                                <input type="url" class="form-control" id="embeddingApiUrl" placeholder="https://dashscope.aliyuncs.com/compatible-mode">
-                            </div>
-                            <div class="form-group">
-                                <label class="form-label">模型名称</label>
-                                <input type="text" class="form-control" id="embeddingModel" placeholder="text-embedding-v3">
-                            </div>
-                            <div class="form-group full-width">
-                                <label class="form-label">API Key</label>
-                                <input type="password" class="form-control" id="embeddingApiKey" placeholder="sk-...">
-                            </div>
-                        </div>
-                        <div id="testResult_embedding" class="test-result" style="display:none;"></div>
-                    </div>
+                <div>
+                    <label>API 地址</label>
+                    <input type="url" value="${escapeHtml(p.api_url || '')}"
+                           oninput="updateField('${p.id}', 'api_url', this.value)"
+                           placeholder="https://api.deepseek.com">
+                </div>
+                <div>
+                    <label>模型</label>
+                    <input type="text" value="${escapeHtml(p.model || '')}"
+                           oninput="updateField('${p.id}', 'model', this.value)"
+                           placeholder="deepseek-chat">
                 </div>
             </div>
-
-            <!-- ③ 识图模型 -->
-            <div class="config-section">
-                <div class="card">
-                    <div class="card-header">
-                        <h3><span class="section-icon">👁️</span>识图模型</h3>
-                        <button class="btn btn-outline btn-sm test-btn" onclick="testModel('vision')">🔗 测试</button>
-                    </div>
-                    <div class="card-body">
-                        <p class="form-text" style="margin-bottom: 16px;">用于多模态图片理解（OCR辅助、图表识别等）。支持 Qwen-VL 等视觉模型。</p>
-                        <div class="config-grid">
-                            <div class="form-group">
-                                <label class="form-label">API 地址</label>
-                                <input type="url" class="form-control" id="visionApiUrl" placeholder="https://dashscope.aliyuncs.com/compatible-mode">
-                            </div>
-                            <div class="form-group">
-                                <label class="form-label">模型名称</label>
-                                <input type="text" class="form-control" id="visionModel" placeholder="qwen-vl-max">
-                            </div>
-                            <div class="form-group full-width">
-                                <label class="form-label">API Key</label>
-                                <input type="password" class="form-control" id="visionApiKey" placeholder="sk-...">
-                            </div>
-                            <div class="form-group">
-                                <label class="form-check">
-                                    <input type="checkbox" id="visionEnabled" checked>
-                                    <span>启用识图功能</span>
-                                </label>
-                            </div>
-                        </div>
-                        <div id="testResult_vision" class="test-result" style="display:none;"></div>
-                    </div>
-                </div>
+            <div class="provider-actions">
+                <button class="btn btn-outline btn-sm" onclick="testProvider('${p.id}')">🔗 测试连接</button>
             </div>
+            <div class="test-result-box" id="testResult_${p.id}"></div>
+        </div>`;
+    }).join('');
+}
 
-            <!-- ④ 文档处理 -->
-            <div class="config-section">
-                <div class="card">
-                    <div class="card-header">
-                        <h3><span class="section-icon">📄</span>文档处理</h3>
-                        <button class="btn btn-outline btn-sm test-btn" onclick="testModel('doc')">🔗 测试</button>
-                    </div>
-                    <div class="card-body">
-                        <p class="form-text" style="margin-bottom: 16px;">
-                            用于高质量文档解析（PDF/扫描件/公式/表格）。支持
-                            <a href="https://github.com/opendatalab/MinerU" target="_blank">MinerU</a> 等文档处理服务。
-                        </p>
-                        <div class="config-grid">
-                            <div class="form-group">
-                                <label class="form-label">服务地址</label>
-                                <input type="url" class="form-control" id="docApiUrl" placeholder="https://mineru.net">
-                                <small class="form-text">MinerU API 服务地址</small>
-                            </div>
-                            <div class="form-group">
-                                <label class="form-label">模型版本</label>
-                                <select class="form-control" id="docModel">
-                                    <option value="vlm">vlm（推荐）</option>
-                                    <option value="pipeline">pipeline（默认）</option>
-                                    <option value="MinerU-HTML">MinerU-HTML</option>
-                                </select>
-                            </div>
-                            <div class="form-group full-width">
-                                <label class="form-label">API Key</label>
-                                <input type="password" class="form-control" id="docApiKey" placeholder="如有鉴权则填写">
-                            </div>
-                        </div>
-                        <div id="testResult_doc" class="test-result" style="display:none;"></div>
-                    </div>
-                </div>
-            </div>
+function toggleProvider(id, enabled) {
+    const p = providers.find(x => x.id === id);
+    if (p) { p.enabled = enabled; }
+}
+function toggleKey(id) { showKeys[id] = !showKeys[id]; renderProviders(); }
+function updateField(id, field, value) {
+    const p = providers.find(x => x.id === id);
+    if (p) { p[field] = value; }
+}
 
-            <!-- 操作按钮 -->
-            <div class="card">
-                <div class="card-body" style="display: flex; gap: 12px; flex-wrap: wrap;">
-                    <button class="btn btn-primary" onclick="saveConfig()">💾 保存全部配置</button>
-                    <button class="btn btn-danger" onclick="resetConfig()">🔄 恢复系统默认</button>
-                </div>
-            </div>
-        </main>
-    </div>
+function selectVendor(id, vendorKey) {
+    const p = providers.find(x => x.id === id);
+    if (!p) return;
+    p.vendor = vendorKey;
+    const vendors = getVendorsForType(p.type);
+    const preset = vendors[vendorKey];
+    if (preset && preset.url !== undefined) {
+        p.api_url = preset.url || '';
+        p.model = preset.model || '';
+    } else if (preset && preset[p.type]) {
+        p.api_url = preset[p.type].url || '';
+        p.model = preset[p.type].model || '';
+    }
+    renderProviders();
+}
 
-    <script src="js/api.js"></script>
-    <script src="js/utils.js"></script>
-    <script>
-        if (!checkAuth()) throw new Error('未登录');
+async function loadConfig() {
+    try {
+        const resp = await api.get('/ai-config/');
+        providers = resp.data.providers || [];
+        const badge = document.getElementById('configBadge');
+        badge.textContent = resp.data.is_custom ? '自定义' : '系统默认';
+        badge.className = 'badge ' + (resp.data.is_custom ? 'badge-success' : 'badge-info');
+        renderProviders();
+    } catch (e) {
+        showToast('加载配置失败: ' + e.message, 'error');
+    }
+}
 
-        // 字段映射：表单 ID ↔ 数据字段
-        const FIELD_IDS = [
-            'aiApiUrl', 'aiApiKey', 'aiModel', 'useRealLlm',
-            'embeddingApiUrl', 'embeddingApiKey', 'embeddingModel',
-            'visionApiUrl', 'visionApiKey', 'visionModel', 'visionEnabled',
-            'docApiUrl', 'docApiKey', 'docModel',
-        ];
+async function saveConfig() {
+    const data = { providers: providers.map(p => ({...p})) };
+    try {
+        await api.put('/ai-config/', data);
+        showToast('配置已保存', 'success');
+        await loadConfig();
+    } catch (e) {
+        showToast('保存失败: ' + e.message, 'error');
+    }
+}
 
-        // 表单 ID → API 字段名
-        const ID_TO_KEY = {
-            aiApiUrl: 'ai_api_url', aiApiKey: 'ai_api_key', aiModel: 'ai_model', useRealLlm: 'use_real_llm',
-            embeddingApiUrl: 'embedding_api_url', embeddingApiKey: 'embedding_api_key', embeddingModel: 'embedding_model',
-            visionApiUrl: 'vision_api_url', visionApiKey: 'vision_api_key', visionModel: 'vision_model', visionEnabled: 'vision_enabled',
-            docApiUrl: 'doc_api_url', docApiKey: 'doc_api_key', docModel: 'doc_model',
-        };
+async function testProvider(id) {
+    const p = providers.find(x => x.id === id);
+    if (!p) return;
+    if (!p.api_key) { showToast('请先填写 API Key', 'warning'); return; }
 
-        // 加载配置
-        async function loadConfig() {
-            try {
-                const result = await api.getAiConfig();
-                const c = result.data;
+    const box = document.getElementById('testResult_' + id);
+    box.className = 'test-result-box';
+    box.textContent = '⏳ 测试中...';
+    box.style.display = 'block';
 
-                // 对话模型
-                document.getElementById('aiApiUrl').value = c.ai_api_url || '';
-                document.getElementById('aiApiKey').value = c.ai_api_key || '';
-                document.getElementById('aiModel').value = c.ai_model || '';
-                document.getElementById('useRealLlm').checked = c.use_real_llm;
+    try {
+        const resp = await api.post('/ai-config/test', {
+            type: p.type,
+            api_url: p.api_url,
+            api_key: p.api_key,
+            model: p.model,
+        });
+        box.className = 'test-result-box success';
+        box.textContent = '✅ ' + (resp.data?.message || '连接成功');
+    } catch (e) {
+        box.className = 'test-result-box error';
+        box.textContent = '❌ ' + (e.message || '测试失败');
+    }
+}
 
-                // 嵌入模型
-                document.getElementById('embeddingApiUrl').value = c.embedding_api_url || '';
-                document.getElementById('embeddingApiKey').value = c.embedding_api_key || '';
-                document.getElementById('embeddingModel').value = c.embedding_model || '';
+async function resetConfig() {
+    if (!confirm('确定恢复系统默认配置？自定义设置将被清除。')) return;
+    try {
+        await api.delete('/ai-config/');
+        showToast('已恢复默认', 'success');
+        await loadConfig();
+    } catch (e) {
+        showToast('重置失败: ' + e.message, 'error');
+    }
+}
 
-                // 识图模型
-                document.getElementById('visionApiUrl').value = c.vision_api_url || '';
-                document.getElementById('visionApiKey').value = c.vision_api_key || '';
-                document.getElementById('visionModel').value = c.vision_model || '';
-                document.getElementById('visionEnabled').checked = c.vision_enabled;
-
-                // 文档处理
-                document.getElementById('docApiUrl').value = c.doc_api_url || '';
-                document.getElementById('docApiKey').value = c.doc_api_key || '';
-                document.getElementById('docModel').value = c.doc_model || 'vlm';
-
-                // 状态徽章
-                const badge = document.getElementById('configStatusBadge');
-                badge.textContent = c.is_custom ? '自定义配置' : '系统默认';
-                badge.className = 'badge ' + (c.is_custom ? 'badge-success' : 'badge-info');
-            } catch (e) {
-                showToast('加载配置失败: ' + e.message, 'error');
-            }
-        }
-
-        // 收集表单数据
-        function collectFormData() {
-            const data = {};
-            for (const id of FIELD_IDS) {
-                const el = document.getElementById(id);
-                const key = ID_TO_KEY[id];
-                if (el.type === 'checkbox') {
-                    data[key] = el.checked;
-                } else {
-                    data[key] = el.value.trim();
-                }
-            }
-            return data;
-        }
-
-        // 保存
-        async function saveConfig() {
-            const data = collectFormData();
-            try {
-                await api.updateAiConfig(data);
-                showToast('AI 配置已保存', 'success');
-                loadConfig();
-            } catch (e) {
-                showToast('保存失败: ' + e.message, 'error');
-            }
-        }
-
-        // 测试连接
-        async function testModel(type) {
-            const btn = event.target;
-            btn.disabled = true;
-            const origText = btn.textContent;
-            btn.textContent = '⏳ 测试中...';
-
-            const resultDiv = document.getElementById('testResult_' + type);
-            resultDiv.style.display = 'block';
-            resultDiv.innerHTML = '<p>正在测试连接...</p>';
-
-            try {
-                const resp = await api.testAiConfig(type);
-                if (resp.code === 200) {
-                    resultDiv.innerHTML = '<p style="color:green;">✅ ' + resp.data.message + '</p>';
-                } else {
-                    resultDiv.innerHTML = '<p style="color:red;">❌ ' + resp.msg + '</p>';
-                }
-            } catch (e) {
-                resultDiv.innerHTML = '<p style="color:red;">❌ 测试失败: ' + e.message + '</p>';
-            } finally {
-                btn.disabled = false;
-                btn.textContent = origText;
-            }
-        }
-
-        // 恢复默认
-        async function resetConfig() {
-            if (!confirm('确定要恢复为系统默认配置吗？所有自定义设置将被清除。')) return;
-            try {
-                await api.resetAiConfig();
-                showToast('已恢复系统默认配置', 'success');
-                loadConfig();
-            } catch (e) {
-                showToast('重置失败: ' + e.message, 'error');
-            }
-        }
-
-        function logout() { api.logout(); }
-
-        loadConfig();
-    </script>
+function logout() { api.logout(); }
+loadConfig();
+</script>
 </body>
 </html>

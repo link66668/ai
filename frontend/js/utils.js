@@ -102,6 +102,12 @@ function confirmDialog(message) {
     });
 }
 
+// HTML 转义
+function escapeHtml(str) {
+    if (!str) return '';
+    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
 // 检查登录状态
 function checkAuth() {
     const token = localStorage.getItem('token');

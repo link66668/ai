@@ -893,12 +893,6 @@
         if (!silent) showToast('附件已清除', 'info');
     }
 
-    // ========== HTML 转义工具 ==========
-    function escapeHtml(str) {
-        if (!str) return '';
-        return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-    }
-
     // ========== 页面可见性 & 卸载处理 ==========
     document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'visible' && currentStreamController) {

@@ -1,95 +1,113 @@
+import json
 from database import db
+from config import Config
 
 
 class UserAIConfig:
-    """用户AI配置模型 — 每个用户独立的AI设置（对话/嵌入/识图/文档处理）"""
-
-    # 所有可配置字段及其在 Config 中的默认值 key
-    FIELDS = [
-        # 对话模型
-        'ai_api_key', 'ai_api_url', 'ai_model', 'use_real_llm',
-        # 嵌入模型
-        'embedding_api_key', 'embedding_api_url', 'embedding_model',
-        # 识图模型
-        'vision_api_key', 'vision_api_url', 'vision_model', 'vision_enabled',
-        # 文档处理
-        'doc_api_key', 'doc_api_url', 'doc_model',
-    ]
+    """用户AI配置 — providers 列表以 JSON 存储"""
 
     @staticmethod
     def find_by_user(user_id):
-        """获取用户的AI配置"""
         sql = "SELECT * FROM user_ai_config WHERE user_id = ?"
         return db.fetch_one(sql, (user_id,))
 
     @staticmethod
     def upsert(user_id, **kwargs):
-        """创建或更新用户AI配置"""
-        # 只允许已知字段
-        data = {k: kwargs.get(k, '') for k in UserAIConfig.FIELDS if k in kwargs}
-
         existing = UserAIConfig.find_by_user(user_id)
         if existing:
             sets = []
             values = []
-            for k, v in data.items():
+            for k, v in kwargs.items():
                 sets.append(f"{k} = ?")
-                values.append(v)
+                values.append(json.dumps(v, ensure_ascii=False) if isinstance(v, (list, dict)) else v)
             sets.append("updated_at = CURRENT_TIMESTAMP")
             values.append(user_id)
             sql = f"UPDATE user_ai_config SET {', '.join(sets)} WHERE user_id = ?"
             db.update(sql, values)
         else:
-            cols = ['user_id'] + list(data.keys())
+            cols = ['user_id'] + list(kwargs.keys())
             placeholders = ', '.join(['?'] * len(cols))
-            values = [user_id] + list(data.values())
+            values = [user_id]
+            for v in kwargs.values():
+                values.append(json.dumps(v, ensure_ascii=False) if isinstance(v, (list, dict)) else v)
             sql = f"INSERT INTO user_ai_config ({', '.join(cols)}) VALUES ({placeholders})"
             db.insert(sql, values)
 
     @staticmethod
     def delete(user_id):
-        """删除用户AI配置（恢复使用系统默认）"""
         sql = "DELETE FROM user_ai_config WHERE user_id = ?"
         return db.delete(sql, (user_id,))
 
     @staticmethod
     def get_effective_config(user_id):
         """
-        获取用户的有效AI配置（用户配置优先，系统配置兜底）
-
-        Returns:
-            dict: 所有AI相关配置项
+        获取有效配置（用户配置优先，系统默认兜底）
+        兼容旧版 flat 字段 + 新版 providers JSON
         """
-        from config import Config
-
         uc = UserAIConfig.find_by_user(user_id) or {}
+        providers = {}
 
-        def _resolve(user_val, default):
-            """用户值非空则用用户值，否则用系统默认"""
-            if isinstance(user_val, str):
-                return user_val.strip() or default
-            return user_val if user_val is not None else default
+        # 新版：从 providers JSON 中解析
+        if uc and uc.get('providers'):
+            try:
+                raw = uc['providers']
+                plist = json.loads(raw) if isinstance(raw, str) else raw
+                for p in plist:
+                    providers[p['type']] = p
+            except (json.JSONDecodeError, KeyError, TypeError):
+                pass
+
+        # 旧版兼容：从 flat 字段读取（providers 为空时兜底）
+        def _legacy(provider_key, api_key_field, api_url_field, model_field, enabled_field=None):
+            if provider_key in providers:
+                return None  # 新版优先
+            if not uc:
+                return None
+            api_key = uc.get(api_key_field, '') or ''
+            api_url = uc.get(api_url_field, '') or ''
+            model = uc.get(model_field, '') or ''
+            if not api_key and not api_url and not model:
+                return None
+            p = {'api_key': api_key, 'api_url': api_url, 'model': model}
+            if enabled_field:
+                p['enabled'] = bool(uc.get(enabled_field, 1))
+            return p
+
+        for legacy_type, info in [
+            ('chat',      ('ai_api_key', 'ai_api_url', 'ai_model', 'use_real_llm')),
+            ('embedding', ('embedding_api_key', 'embedding_api_url', 'embedding_model', None)),
+            ('vision',    ('vision_api_key', 'vision_api_url', 'vision_model', 'vision_enabled')),
+            ('doc',       ('doc_api_key', 'doc_api_url', 'doc_model', None)),
+        ]:
+            p = _legacy(legacy_type, *info)
+            if p:
+                providers[legacy_type] = p
+
+        def _resolve(provider_key, field_key, default):
+            if provider_key in providers:
+                val = providers[provider_key].get(field_key, '')
+                if isinstance(val, str) and val.strip():
+                    return val.strip()
+                if isinstance(val, bool):
+                    return val
+            return default
 
         return {
-            # 对话模型
-            'ai_api_key': _resolve(uc.get('ai_api_key'), Config.AI_API_KEY),
-            'ai_api_url': _resolve(uc.get('ai_api_url'), Config.AI_API_URL),
-            'ai_model': _resolve(uc.get('ai_model'), Config.AI_MODEL),
-            'use_real_llm': bool(uc.get('use_real_llm', 1)) if uc else Config.USE_REAL_LLM,
+            'ai_api_key': _resolve('chat', 'api_key', Config.AI_API_KEY),
+            'ai_api_url': _resolve('chat', 'api_url', Config.AI_API_URL),
+            'ai_model': _resolve('chat', 'model', Config.AI_MODEL),
+            'use_real_llm': bool(_resolve('chat', 'enabled', Config.USE_REAL_LLM)),
 
-            # 嵌入模型
-            'embedding_api_key': _resolve(uc.get('embedding_api_key'), Config.EMBEDDING_API_KEY),
-            'embedding_api_url': _resolve(uc.get('embedding_api_url'), Config.EMBEDDING_API_URL),
-            'embedding_model': _resolve(uc.get('embedding_model'), Config.EMBEDDING_MODEL),
+            'embedding_api_key': _resolve('embedding', 'api_key', Config.EMBEDDING_API_KEY),
+            'embedding_api_url': _resolve('embedding', 'api_url', Config.EMBEDDING_API_URL),
+            'embedding_model': _resolve('embedding', 'model', Config.EMBEDDING_MODEL),
 
-            # 识图模型
-            'vision_api_key': _resolve(uc.get('vision_api_key'), Config.VISION_API_KEY),
-            'vision_api_url': _resolve(uc.get('vision_api_url'), Config.VISION_API_URL),
-            'vision_model': _resolve(uc.get('vision_model'), Config.VISION_MODEL),
-            'vision_enabled': bool(uc.get('vision_enabled', 1)) if uc else Config.VISION_ENABLED,
+            'vision_api_key': _resolve('vision', 'api_key', Config.VISION_API_KEY),
+            'vision_api_url': _resolve('vision', 'api_url', Config.VISION_API_URL),
+            'vision_model': _resolve('vision', 'model', Config.VISION_MODEL),
+            'vision_enabled': bool(_resolve('vision', 'enabled', Config.VISION_ENABLED)),
 
-            # 文档处理
-            'doc_api_key': _resolve(uc.get('doc_api_key'), ''),
-            'doc_api_url': _resolve(uc.get('doc_api_url'), ''),
-            'doc_model': _resolve(uc.get('doc_model'), 'vlm'),
+            'doc_api_key': _resolve('doc', 'api_key', ''),
+            'doc_api_url': _resolve('doc', 'api_url', ''),
+            'doc_model': _resolve('doc', 'model', 'vlm'),
         }

@@ -149,6 +149,9 @@ class Database:
                     doc_api_url TEXT DEFAULT '',
                     doc_model TEXT DEFAULT 'vlm',
 
+                    -- 多 Provider JSON（chat-app 模式）
+                    providers TEXT DEFAULT NULL,
+
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
                 )
