@@ -54,6 +54,26 @@ def get_conversation(current_user, conv_id):
 
     return success_response(conv)
 
+@chat_bp.route('/<int:conv_id>', methods=['PATCH'])
+@token_required
+def rename_conversation(current_user, conv_id):
+    """重命名对话"""
+    conv = Conversation.find_by_id(conv_id)
+    if not conv:
+        return error_response('对话不存在', 404)
+
+    if conv['user_id'] != current_user['id']:
+        return error_response('无权访问', 403)
+
+    data = request.get_json() or {}
+    title = (data.get('title') or '').strip()
+    if not title:
+        return error_response('标题不能为空')
+
+    Conversation.update_title(conv_id, title)
+    return success_response(msg='重命名成功')
+
+
 @chat_bp.route('/<int:conv_id>', methods=['DELETE'])
 @token_required
 def delete_conversation(current_user, conv_id):
@@ -99,8 +119,12 @@ def get_messages(current_user, conv_id):
 @chat_bp.route('/<int:conv_id>/messages', methods=['POST'])
 @token_required
 def send_message(current_user, conv_id):
-    """发送消息（调用Agent）"""
-    from services.ai_service import ai_service
+    """
+    发送消息（阻塞模式，非流式）
+
+    使用 chat_engine.process_blocking() — 支持 RAG + LLM
+    """
+    from services.chat_engine import chat_engine
 
     conv = Conversation.find_by_id(conv_id)
     if not conv:
@@ -120,26 +144,31 @@ def send_message(current_user, conv_id):
     # 保存用户消息
     Message.create(conv_id, 'user', content)
 
-    # 获取历史消息作为上下文
+    # 获取历史
     history = Message.find_by_conversation(conv_id)
     history_list = [{'role': m['role'], 'content': m['content']} for m in history[-10:]]
 
-    # 调用AI服务
-    result = ai_service.chat(
+    # 获取 AI 配置
+    from models.user_ai_config import UserAIConfig
+    ai_config = UserAIConfig.get_effective_config(current_user['id'])
+
+    # chat_engine 阻塞管线
+    result = chat_engine.process_blocking(
         message=content,
         course_id=conv.get('course_id'),
-        conversation_history=history_list
+        conversation_history=history_list,
+        ai_config=ai_config,
     )
 
-    # 保存AI回复
-    msg_id = Message.create(
-        conv_id,
-        'assistant',
-        result['response'],
-        result.get('references')
-    )
+    # 保存 AI 回复
+    refs = [
+        {'num': c.get('num'), 'document_id': c.get('document_id', ''),
+         'heading_path': c.get('heading_path', ''), 'source': c.get('source', 'course_kb')}
+        for c in result.get('citations', [])
+    ]
+    msg_id = Message.create(conv_id, 'assistant', result['response'], refs or None)
 
-    # 更新对话标题（如果是第一条消息）
+    # 首条消息 → 自动标题
     if len(history) <= 1:
         title = content[:20] + ('...' if len(content) > 20 else '')
         Conversation.update_title(conv_id, title)
@@ -147,7 +176,7 @@ def send_message(current_user, conv_id):
     return success_response({
         'id': msg_id,
         'content': result['response'],
-        'references': result.get('references', [])
+        'references': refs,
     })
 
 
@@ -156,8 +185,16 @@ def send_message(current_user, conv_id):
 @chat_bp.route('/<int:conv_id>/messages/stream', methods=['POST'])
 @token_required
 def send_message_stream(current_user, conv_id):
-    """发送消息并流式返回（SSE）"""
-    from services.ai_service import ai_service
+    """
+    发送消息并流式返回 (SSE)
+
+    数据流 (对应 chat-app useChat.send → streamChat):
+      1. 保存用户消息到 DB
+      2. 获取对话历史
+      3. chat_engine.process() → (SSE生成器, citations)
+      4. 流式传输中：累积 full_response，保存 assistant 消息
+    """
+    from services.chat_engine import chat_engine
 
     conv = Conversation.find_by_id(conv_id)
     if not conv:
@@ -171,57 +208,57 @@ def send_message_stream(current_user, conv_id):
         return error_response('请求数据为空')
 
     content = data.get('content', '').strip()
-    if not content:
-        return error_response('消息内容不能为空')
-
     temp_file_session_id = data.get('temp_file_session_id')
 
-    # 保存用户消息
+    # 允许纯文件上传（无文字消息），但不能两者都为空
+    if not content and not temp_file_session_id:
+        return error_response('消息内容不能为空')
+
+    # ---- Step 1: 保存用户消息 ----
     Message.create(conv_id, 'user', content)
 
-    # 获取历史消息
+    # ---- Step 2: 获取对话历史 ----
     history = Message.find_by_conversation(conv_id)
     history_list = [{'role': m['role'], 'content': m['content']} for m in history[-10:]]
 
-    # 获取用户AI配置
+    # ---- Step 3: 获取用户 AI 配置 ----
     from models.user_ai_config import UserAIConfig
     ai_config = UserAIConfig.get_effective_config(current_user['id'])
 
-    # 调用 RAG 流式管线
-    stream_gen = ai_service.chat_rag(
+    # ---- Step 4: chat_engine 管线 (resolve_context → build_messages → stream) ----
+    stream_gen, citations = chat_engine.process(
         message=content,
         course_id=conv.get('course_id'),
         conversation_history=history_list,
         temp_file_session_id=temp_file_session_id,
-        stream=True,
         ai_config=ai_config,
     )
 
+    # ---- Step 5: 流式传输 + DB 持久化 ----
     def generate():
         full_response = ''
-        citations = []
 
         for event in stream_gen:
-            # 解析 SSE 事件提取内容
             if event.startswith('data: '):
                 try:
                     event_data = json.loads(event[6:])
                     if event_data.get('done'):
                         interrupted = event_data.get('interrupted', False)
-                        citations = event_data.get('citations', [])
+
+                        # 保存 assistant 回复到数据库
                         if full_response.strip():
-                            # 将 citations 转为 references 格式保存到数据库
-                            refs = []
-                            for c in citations:
-                                refs.append({
+                            refs = [
+                                {
                                     'num': c.get('num'),
                                     'document_id': c.get('document_id', ''),
                                     'heading_path': c.get('heading_path', ''),
                                     'source': c.get('source', 'course_kb'),
-                                })
-                            Message.create(
-                                conv_id, 'assistant', full_response, refs
-                            )
+                                }
+                                for c in citations
+                            ]
+                            Message.create(conv_id, 'assistant', full_response, refs)
+
+                        # 首条消息 → 用内容作标题
                         if not interrupted and len(history) <= 1:
                             title = content[:20] + ('...' if len(content) > 20 else '')
                             Conversation.update_title(conv_id, title)

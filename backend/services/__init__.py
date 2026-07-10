@@ -30,6 +30,8 @@ def __getattr__(name):
         'VisionService': '.vision_service',
         'mineru_service': '.mineru_service',
         'MinerUService': '.mineru_service',
+        'chat_engine': '.chat_engine',
+        'ChatEngine': '.chat_engine',
     }
 
     if name in _imports:

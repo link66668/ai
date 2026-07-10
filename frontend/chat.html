@@ -8,7 +8,7 @@
 </head>
 <body>
     <div class="page-wrapper">
-        <!-- 侧边栏 -->
+        <!-- 全局侧边栏 -->
         <aside class="sidebar">
             <div class="sidebar-header">
                 <h2>📚 学习助手</h2>
@@ -42,54 +42,114 @@
         </aside>
 
         <!-- 主内容 -->
-        <main class="main-content">
-            <div class="topbar">
-                <h1>Agent 对话</h1>
-                <div class="topbar-actions">
-                    <select class="form-control" style="width:180px;" id="courseSelect" onchange="switchCourse()">
+        <main class="main-content" style="padding:0; display:flex; flex-direction:column;">
+
+            <!-- 顶部栏 -->
+            <div class="chat-topbar">
+                <div class="chat-topbar-left">
+                    <button class="chat-icon-btn" id="toggleSidebarBtn" onclick="toggleConvSidebar()" title="切换对话列表">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/></svg>
+                    </button>
+                    <span class="chat-topbar-title" id="topbarTitle">Agent 对话</span>
+                </div>
+                <div class="chat-topbar-right">
+                    <select class="form-control course-select-mini" id="courseSelect" onchange="switchCourse()">
                         <option value="">通用对话</option>
                     </select>
-                    <button class="btn btn-primary" onclick="newChat()">+ 新建对话</button>
+                    <span class="chat-provider-badge" id="providerBadge" style="display:none;"></span>
                 </div>
             </div>
 
-            <div class="chat-container">
-                <!-- 对话列表 -->
-                <div class="chat-sidebar">
-                    <div class="chat-sidebar-header">
-                        <strong>历史对话</strong>
+            <!-- 聊天主体区 -->
+            <div class="chat-body">
+
+                <!-- 对话列表侧栏 -->
+                <div class="conv-sidebar" id="convSidebar">
+                    <div class="conv-sidebar-header">
+                        <span>历史对话</span>
+                        <button class="chat-icon-btn" onclick="newChat()" title="新建对话">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                        </button>
                     </div>
-                    <div class="chat-list" id="chatList">
-                        <div class="empty-state" style="padding:30px;">
-                            <p>暂无对话</p>
-                        </div>
+                    <div class="conv-list" id="convList">
+                        <div class="conv-empty">暂无对话</div>
                     </div>
                 </div>
 
-                <!-- 聊天区域 -->
-                <div class="chat-main">
-                    <!-- 临时文件栏 -->
-                    <div class="temp-file-bar hidden" id="tempFileBar">
-                        <span class="temp-file-label">📎 临时文件：</span>
-                        <div class="temp-file-list" id="tempFileList"></div>
-                        <button class="btn btn-sm btn-outline" onclick="clearTempFiles()" title="清除所有临时文件">清除</button>
-                    </div>
-                    <div class="chat-messages" id="chatMessages">
-                        <div class="empty-state">
-                            <div class="icon">💬</div>
-                            <h3>开始你的学习之旅</h3>
-                            <p>选择课程并创建新对话，AI助手将为你提供专属答疑</p>
+                <!-- 聊天主区域 -->
+                <div class="chat-main-area">
+
+                    <!-- 欢迎屏 -->
+                    <div class="chat-welcome" id="chatWelcome">
+                        <div class="welcome-icon">💬</div>
+                        <h2 class="welcome-title">课程学习助手</h2>
+                        <p class="welcome-desc">选择课程并开始对话，AI 助手将为你提供专属答疑。你也可以上传文件（图片、PDF、Word）作为上下文。</p>
+                        <div class="welcome-suggestions" id="welcomeSuggestions">
+                            <button class="suggestion-card" onclick="handleSuggestion('帮我梳理这门课程的核心知识框架')">
+                                <span class="suggestion-icon">💡</span>
+                                <span class="suggestion-text">帮我梳理核心知识框架</span>
+                            </button>
+                            <button class="suggestion-card" onclick="handleSuggestion('这个知识点怎么理解和记忆？')">
+                                <span class="suggestion-icon">🧠</span>
+                                <span class="suggestion-text">知识点理解与记忆方法</span>
+                            </button>
+                            <button class="suggestion-card" onclick="handleSuggestion('帮我总结这门课程的重点内容')">
+                                <span class="suggestion-icon">📝</span>
+                                <span class="suggestion-text">总结课程重点内容</span>
+                            </button>
+                            <button class="suggestion-card" onclick="handleSuggestion('给我出几道练习题检验学习效果')">
+                                <span class="suggestion-icon">🎯</span>
+                                <span class="suggestion-text">出练习题检验效果</span>
+                            </button>
                         </div>
                     </div>
-                    <div class="chat-input-area">
-                        <label class="btn btn-outline btn-icon" for="tempFileInput" title="上传临时文件（图片/PDF/Word等）">📎</label>
-                        <input type="file" id="tempFileInput" style="display:none"
-                            accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.jpg,.jpeg,.png,.gif"
-                            onchange="handleTempFileUpload(this)">
-                        <textarea class="chat-input" id="chatInput" placeholder="输入你的问题..." rows="1"
-                            onkeydown="handleInputKey(event)"></textarea>
-                        <button class="btn btn-primary" id="sendBtn" onclick="sendMessage()">发送</button>
-                        <button class="btn btn-danger btn-icon hidden" id="stopBtn" onclick="stopStreaming()" title="停止生成">⏹</button>
+
+                    <!-- 消息列表 -->
+                    <div class="chat-messages-v2 hidden" id="chatMessages">
+                        <!-- 动态插入消息 -->
+                        <div class="chat-scroll-anchor" id="scrollAnchor"></div>
+                    </div>
+
+                    <!-- 临时文件栏 -->
+                    <div class="temp-file-bar-v2 hidden" id="tempFileBar">
+                        <span class="temp-file-label">📎 附件：</span>
+                        <div class="temp-file-list" id="tempFileList"></div>
+                        <button class="chat-icon-btn chat-icon-btn--sm" onclick="clearTempFiles()" title="清除所有附件">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                        </button>
+                    </div>
+
+                    <!-- 输入区 (Composer) -->
+                    <div class="chat-composer" id="chatComposer"
+                         ondrop="handleComposerDrop(event)"
+                         ondragover="event.preventDefault(); event.dataTransfer.dropEffect='copy';">
+                        <!-- 附件预览行 -->
+                        <div class="composer-attachments hidden" id="composerAttachments"></div>
+                        <div class="composer-row">
+                            <!-- 工具按钮 -->
+                            <div class="composer-tools">
+                                <label class="chat-icon-btn" for="tempFileInput" title="上传附件（图片/PDF/Word等）">
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+                                </label>
+                                <input type="file" id="tempFileInput" style="display:none"
+                                    accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.jpg,.jpeg,.png,.gif"
+                                    onchange="handleTempFileUpload(this)" multiple>
+                            </div>
+                            <!-- 文本输入 -->
+                            <textarea class="composer-textarea" id="chatInput"
+                                placeholder="输入你的问题... (Shift+Enter 换行)"
+                                rows="1"
+                                onkeydown="handleInputKey(event)"
+                                oninput="autoResizeTextarea(this)"
+                                onpaste="handleComposerPaste(event)"></textarea>
+                            <!-- 发送 / 停止 -->
+                            <button class="composer-send-btn" id="sendBtn" onclick="sendMessage()" title="发送">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                            </button>
+                            <button class="composer-stop-btn hidden" id="stopBtn" onclick="stopStreaming()" title="停止生成">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -99,494 +159,673 @@
     <script src="js/api.js"></script>
     <script src="js/utils.js"></script>
     <script>
-        if (!checkAuth()) throw new Error('未登录');
+    /* ================================================================
+     *  chat.html — 仿照 chat-app 架构重写的对话页面
+     *
+     *  核心逻辑映射:
+     *    chatStore.ts   → ChatState 对象 (conversations, activeId, isStreaming)
+     *    useChat.ts     → send() / stopStreaming() 函数
+     *    ai.ts          → api.streamMessage() (SSE via fetch + ReadableStream)
+     *    ChatWindow.tsx  → 本文件的 HTML + 渲染函数
+     *    MessageBubble   → renderMessageBubble()
+     *    MessageList     → renderMessages() + auto-scroll
+     *    Composer        → #chatComposer 区域
+     *    WelcomeScreen   → #chatWelcome 区域
+     * ================================================================ */
 
-        let currentCourseId = getUrlParam('course_id') || '';
-        let currentConvId = null;
-        let conversations = [];
-        let courses = [];
+    if (!checkAuth()) throw new Error('未登录');
 
-        // 流式和临时文件状态
-        let currentStreamController = null;
-        let tempFileSessionId = null;
-        let tempFiles = [];  // [{file_id, filename, file_type, file_size, preview}]
+    // ========== 全局状态 (对应 chatStore.ts) ==========
+    const ChatState = {
+        conversations: [],          // Conversation[]
+        activeConversationId: null, // string | null
+        isStreaming: false,         // boolean
+        currentCourseId: getUrlParam('course_id') || '',
+        courses: [],
+    };
 
-        // 流式渲染优化
-        let streamRafId = null;
-        let pendingStreamText = null;
+    // ========== 流式状态 ==========
+    let currentStreamController = null;
+    let tempFileSessionId = null;
+    let tempFiles = [];             // [{file_id, filename, file_type, file_size, status, preview}]
 
-        // 加载课程列表
-        async function loadCourses() {
-            try {
-                const result = await api.getCourses();
-                courses = result.data || [];
-                const select = document.getElementById('courseSelect');
-                select.innerHTML = '<option value="">通用对话</option>' +
-                    courses.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+    // 流式渲染优化 (rAF 批处理 + 稳定内容缓存)
+    let streamRafId = null;
+    let pendingStreamText = null;
+    let lastStableHtml = '';
+    let lastStableBoundary = -1;
 
-                if (currentCourseId) {
-                    select.value = currentCourseId;
-                }
-            } catch (error) {
-                console.error(error);
+    // ========== 对话侧栏切换 ==========
+    function toggleConvSidebar() {
+        const sidebar = document.getElementById('convSidebar');
+        sidebar.classList.toggle('collapsed');
+    }
+
+    // ========== 课程加载与切换 ==========
+    async function loadCourses() {
+        try {
+            const result = await api.getCourses();
+            ChatState.courses = result.data || [];
+            const select = document.getElementById('courseSelect');
+            select.innerHTML = '<option value="">通用对话</option>' +
+                ChatState.courses.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+            if (ChatState.currentCourseId) select.value = ChatState.currentCourseId;
+        } catch (e) {
+            console.error('加载课程失败', e);
+        }
+    }
+
+    function switchCourse() {
+        ChatState.currentCourseId = document.getElementById('courseSelect').value;
+        ChatState.activeConversationId = null;
+        loadConversations();
+        showWelcomeScreen();
+    }
+
+    // ========== 对话列表 (对应 chatStore actions) ==========
+    async function loadConversations() {
+        try {
+            const result = await api.getConversations(ChatState.currentCourseId || undefined);
+            ChatState.conversations = result.data || [];
+            renderConvList();
+
+            if (ChatState.conversations.length && !ChatState.activeConversationId) {
+                selectConversation(ChatState.conversations[0].id);
             }
+        } catch (e) {
+            showToast('加载对话列表失败', 'error');
         }
+    }
 
-        // 加载对话列表
-        async function loadConversations() {
-            try {
-                const result = await api.getConversations(currentCourseId || undefined);
-                conversations = result.data || [];
-                renderChatList();
+    function renderConvList() {
+        const container = document.getElementById('convList');
+        if (!ChatState.conversations.length) {
+            container.innerHTML = '<div class="conv-empty">暂无对话</div>';
+            return;
+        }
+        container.innerHTML = ChatState.conversations.map(conv => {
+            const isActive = conv.id == ChatState.activeConversationId;
+            return `
+                <div class="conv-item ${isActive ? 'active' : ''}"
+                     onclick="selectConversation(${conv.id})" data-conv-id="${conv.id}">
+                    <span class="conv-item-icon">💬</span>
+                    <span class="conv-item-title">${escapeHtml(conv.title || '新对话')}</span>
+                    <button class="conv-item-delete" onclick="event.stopPropagation(); deleteConversation(${conv.id})" title="删除">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                    </button>
+                </div>`;
+        }).join('');
+    }
 
-                // 如果有对话且没有当前对话，选中第一个
-                if (conversations.length && !currentConvId) {
-                    selectConversation(conversations[0].id);
-                }
-            } catch (error) {
-                showToast('加载对话列表失败', 'error');
+    function getActiveConversation() {
+        return ChatState.conversations.find(c => c.id == ChatState.activeConversationId);
+    }
+
+    async function selectConversation(convId) {
+        ChatState.activeConversationId = convId;
+        renderConvList();
+        updateTopbarTitle();
+        await loadMessages();
+    }
+
+    async function newChat() {
+        try {
+            const result = await api.createConversation(ChatState.currentCourseId || null, '新对话');
+            ChatState.activeConversationId = result.data.id;
+            await loadConversations();
+            showWelcomeScreen();
+            document.getElementById('chatInput').focus();
+        } catch (e) {
+            showToast('创建对话失败', 'error');
+        }
+    }
+
+    async function deleteConversation(convId) {
+        if (!confirm('确定删除这个对话吗？')) return;
+        try {
+            await api.deleteConversation(convId);
+            ChatState.conversations = ChatState.conversations.filter(c => c.id != convId);
+            if (ChatState.activeConversationId == convId) {
+                ChatState.activeConversationId = null;
+                showWelcomeScreen();
             }
+            renderConvList();
+            updateTopbarTitle();
+            showToast('对话已删除', 'info');
+        } catch (e) {
+            showToast('删除失败', 'error');
+        }
+    }
+
+    function updateTopbarTitle() {
+        const conv = getActiveConversation();
+        document.getElementById('topbarTitle').textContent = conv ? (conv.title || '新对话') : 'Agent 对话';
+    }
+
+    // ========== 欢迎屏 / 消息列表切换 ==========
+    function showWelcomeScreen() {
+        document.getElementById('chatWelcome').classList.remove('hidden');
+        document.getElementById('chatMessages').classList.add('hidden');
+    }
+
+    function showMessagesArea() {
+        document.getElementById('chatWelcome').classList.add('hidden');
+        document.getElementById('chatMessages').classList.remove('hidden');
+    }
+
+    // ========== 消息加载与渲染 (对应 MessageList + MessageBubble) ==========
+    async function loadMessages() {
+        if (!ChatState.activeConversationId) return;
+        try {
+            const result = await api.getMessages(ChatState.activeConversationId);
+            const messages = result.data || [];
+            renderMessages(messages);
+        } catch (e) {
+            showToast('加载消息失败', 'error');
+        }
+    }
+
+    function renderMessages(messages) {
+        const container = document.getElementById('chatMessages');
+
+        if (!messages.length) {
+            showWelcomeScreen();
+            return;
         }
 
-        function renderChatList() {
-            const container = document.getElementById('chatList');
-            if (!conversations.length) {
-                container.innerHTML = '<div class="empty-state" style="padding:30px;"><p>暂无对话</p></div>';
-                return;
+        showMessagesArea();
+
+        // 清空（保留 scroll anchor）
+        const anchor = document.getElementById('scrollAnchor');
+        container.innerHTML = '';
+
+        messages.forEach(msg => {
+            container.appendChild(createMessageElement(msg));
+        });
+
+        container.appendChild(anchor);
+        scrollToBottom();
+    }
+
+    /**
+     * 创建单条消息 DOM (对应 MessageBubble.tsx)
+     */
+    function createMessageElement(msg) {
+        const isUser = msg.role === 'user';
+        const div = document.createElement('div');
+        div.className = `msg-v2 ${isUser ? 'msg-user' : 'msg-assistant'}`;
+
+        // 头像
+        const avatar = document.createElement('div');
+        avatar.className = `msg-avatar ${isUser ? 'msg-avatar-user' : 'msg-avatar-ai'}`;
+        avatar.textContent = isUser ? '👤' : '🤖';
+
+        // 内容容器
+        const content = document.createElement('div');
+        content.className = 'msg-body';
+
+        // 附件展示
+        if (msg.references && msg.references.length > 0 && !isUser) {
+            const refsDiv = document.createElement('div');
+            refsDiv.className = 'msg-refs';
+            const courseRefs = msg.references.filter(r => r.source !== 'temp_file');
+            const tempRefs = msg.references.filter(r => r.source === 'temp_file');
+            let refHtml = '';
+            if (courseRefs.length) {
+                refHtml += '📚 ' + courseRefs.map(r => {
+                    const name = r.doc_name || `文档${r.document_id || ''}`;
+                    return `<span title="${escapeHtml(name)}" style="cursor:help;">[${r.num || '?'}] ${escapeHtml(name)}</span>`;
+                }).join('、');
             }
-
-            container.innerHTML = conversations.map(conv => `
-                <div class="chat-item ${conv.id === currentConvId ? 'active' : ''}"
-                     onclick="selectConversation(${conv.id})">
-                    <div class="chat-item-title">${conv.title || '新对话'}</div>
-                    <div class="chat-item-time">${formatDateTime(conv.updated_at)}</div>
-                </div>
-            `).join('');
+            if (tempRefs.length) refHtml += ' <span class="temp-file-badge">临时文件</span>';
+            refsDiv.innerHTML = refHtml;
+            content.appendChild(refsDiv);
         }
 
-        function switchCourse() {
-            currentCourseId = document.getElementById('courseSelect').value;
-            currentConvId = null;
-            loadConversations();
-            document.getElementById('chatMessages').innerHTML = `
-                <div class="empty-state">
-                    <div class="icon">💬</div>
-                    <h3>开始你的学习之旅</h3>
-                    <p>选择课程并创建新对话，AI助手将为你提供专属答疑</p>
-                </div>
-            `;
+        // 气泡
+        const bubble = document.createElement('div');
+        bubble.className = `msg-bubble ${isUser ? 'msg-bubble-user' : 'msg-bubble-ai'}`;
+        if (isUser) {
+            const p = document.createElement('p');
+            p.style.whiteSpace = 'pre-wrap';
+            p.textContent = msg.content;
+            bubble.appendChild(p);
+        } else {
+            bubble.innerHTML = renderMarkdown(msg.content || '');
         }
+        content.appendChild(bubble);
 
-        async function newChat() {
+        // 时间戳
+        const time = document.createElement('span');
+        time.className = 'msg-time';
+        time.textContent = formatMessageTime(msg.created_at);
+        content.appendChild(time);
+
+        div.appendChild(avatar);
+        div.appendChild(content);
+        return div;
+    }
+
+    function formatMessageTime(dateStr) {
+        if (!dateStr) return '';
+        const d = new Date(dateStr);
+        return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
+
+    function scrollToBottom() {
+        const anchor = document.getElementById('scrollAnchor');
+        if (anchor) anchor.scrollIntoView({ behavior: 'smooth' });
+    }
+
+    // ========== 发送消息 (对应 useChat.ts send()) ==========
+    async function sendMessage() {
+        const input = document.getElementById('chatInput');
+        const content = input.value.trim();
+        if (!content && tempFiles.length === 0) return;
+        if (ChatState.isStreaming) return;
+
+        // 确保有活跃对话 (对应 chatStore createConversation)
+        if (!ChatState.activeConversationId) {
             try {
-                const result = await api.createConversation(currentCourseId || null, '新对话');
-                currentConvId = result.data.id;
-                await loadConversations();
-
-                document.getElementById('chatMessages').innerHTML = `
-                    <div class="empty-state">
-                        <div class="icon">🤖</div>
-                        <h3>新对话已创建</h3>
-                        <p>在下方输入框开始提问吧！</p>
-                    </div>
-                `;
-                document.getElementById('chatInput').focus();
-            } catch (error) {
+                const title = content ? content.slice(0, 50) : '新对话';
+                const result = await api.createConversation(ChatState.currentCourseId || null, title);
+                ChatState.activeConversationId = result.data.id;
+                loadConversations(); // 并行刷新列表
+            } catch (e) {
                 showToast('创建对话失败', 'error');
-            }
-        }
-
-        async function selectConversation(convId) {
-            currentConvId = convId;
-            renderChatList();
-            await loadMessages();
-        }
-
-        async function loadMessages() {
-            if (!currentConvId) return;
-
-            try {
-                const result = await api.getMessages(currentConvId);
-                const messages = result.data || [];
-                renderMessages(messages);
-            } catch (error) {
-                showToast('加载消息失败', 'error');
-            }
-        }
-
-        function renderMessages(messages) {
-            const container = document.getElementById('chatMessages');
-            if (!messages.length) {
-                container.innerHTML = `
-                    <div class="empty-state">
-                        <div class="icon">🤖</div>
-                        <h3>开始对话</h3>
-                        <p>在下方输入框输入你的问题</p>
-                    </div>`;
                 return;
             }
-            const html = messages.map(msg => `
-                <div class="message ${msg.role}">
-                    <div class="message-avatar">${msg.role === 'user' ? '我' : 'AI'}</div>
-                    <div class="message-content">
-                        <div class="message-bubble">${renderMarkdown(msg.content)}</div>
-                        ${msg.references && msg.references.length ? `
-                            <div class="message-references">
-                                📚 参考: ${msg.references.map(r => r.doc_name).join(', ')}
-                            </div>` : ''}
-                        <div class="message-time">${formatDateTime(msg.created_at)}</div>
-                    </div>
-                </div>`).join('');
-            container.innerHTML = html;
-            container.scrollTop = container.scrollHeight;
         }
 
-        async function sendMessage() {
-            const input = document.getElementById('chatInput');
-            const content = input.value.trim();
-            if (!content) return;
+        // 清空输入
+        input.value = '';
+        input.style.height = 'auto';
 
-            if (!currentConvId) {
-                try {
-                    const result = await api.createConversation(currentCourseId || null, content.slice(0, 20));
-                    currentConvId = result.data.id;
-                    loadConversations(); // 不await，并行执行
-                } catch (error) {
-                    showToast('创建对话失败', 'error');
-                    return;
+        // 切换到消息区域
+        showMessagesArea();
+        const container = document.getElementById('chatMessages');
+
+        // 插入用户消息气泡
+        const userMsgEl = createMessageElement({
+            role: 'user',
+            content: content,
+            references: [],
+            created_at: new Date().toISOString()
+        });
+
+        // 插入 AI 占位气泡 (带加载动画，对应 MessageBubble 的 streaming bouncing dots)
+        const aiMsgId = 'msg-streaming-' + Date.now();
+        const aiMsgEl = document.createElement('div');
+        aiMsgEl.className = 'msg-v2 msg-assistant';
+        aiMsgEl.id = aiMsgId;
+        aiMsgEl.innerHTML = `
+            <div class="msg-avatar msg-avatar-ai">🤖</div>
+            <div class="msg-body">
+                <div class="msg-bubble msg-bubble-ai">
+                    <div class="streaming-dots">
+                        <span class="dot"></span>
+                        <span class="dot"></span>
+                        <span class="dot"></span>
+                    </div>
+                </div>
+                <div class="msg-refs hidden" id="${aiMsgId}-refs"></div>
+                <span class="msg-time">${formatMessageTime(new Date().toISOString())}</span>
+            </div>`;
+
+        // 在 scroll anchor 前插入
+        const anchor = document.getElementById('scrollAnchor');
+        container.insertBefore(userMsgEl, anchor);
+        container.insertBefore(aiMsgEl, anchor);
+        scrollToBottom();
+
+        // 切换按钮状态
+        setStreamingUI(true);
+
+        const bubble = aiMsgEl.querySelector('.msg-bubble');
+        const refsEl = document.getElementById(`${aiMsgId}-refs`);
+
+        // 调用 SSE 流式 API (对应 ai.ts streamChat)
+        currentStreamController = api.streamMessage(
+            ChatState.activeConversationId, content, tempFileSessionId,
+
+            // onChunk — rAF 批处理渲染
+            (delta, fullText) => {
+                scheduleStreamUpdate(bubble, fullText, container);
+            },
+
+            // onDone — 最终渲染
+            (fullText, citations, interrupted) => {
+                if (streamRafId) { cancelAnimationFrame(streamRafId); streamRafId = null; }
+                const finalText = fullText || pendingStreamText || '';
+                pendingStreamText = null;
+                lastStableHtml = '';
+                lastStableBoundary = -1;
+
+                // 替换 streaming dots 为最终 markdown
+                bubble.innerHTML = renderMarkdown(finalText);
+
+                // 显示引用来源
+                if (citations && citations.length) {
+                    const courseRefs = citations.filter(c => c.source !== 'temp_file');
+                    const tempRefs = citations.filter(c => c.source === 'temp_file');
+                    let refHtml = '';
+                    if (courseRefs.length) {
+                        refHtml += '📚 引用来源: ' + courseRefs.map(r => {
+                            const name = r.doc_name || `文档${r.document_id || ''}`;
+                            const heading = r.heading_path ? ` > ${r.heading_path}` : '';
+                            return `<span title="${escapeHtml(name + heading)}" style="cursor:help;">[${r.num}] ${escapeHtml(name)}</span>`;
+                        }).join('、') + ' ';
+                    }
+                    if (tempRefs.length) refHtml += '<span class="temp-file-badge">临时文件</span>';
+                    refsEl.innerHTML = refHtml;
+                    refsEl.classList.remove('hidden');
                 }
-            }
 
-            input.value = '';
-            const sendBtn = document.getElementById('sendBtn');
-            const stopBtn = document.getElementById('stopBtn');
+                if (interrupted) showToast('生成已停止', 'warning');
+
+                setStreamingUI(false);
+                currentStreamController = null;
+                loadConversations(); // 后台刷新
+            },
+
+            // onError
+            (error) => {
+                if (streamRafId) { cancelAnimationFrame(streamRafId); streamRafId = null; }
+                pendingStreamText = null;
+                lastStableHtml = '';
+                lastStableBoundary = -1;
+
+                bubble.innerHTML = '<em style="color:var(--gray-500)">AI 服务暂时不可用: ' + escapeHtml(error.message) + '</em>';
+                setStreamingUI(false);
+                currentStreamController = null;
+                showToast('发送失败: ' + error.message, 'error');
+            }
+        );
+    }
+
+    function stopStreaming() {
+        if (currentStreamController) {
+            currentStreamController.abort();
+            if (ChatState.activeConversationId) {
+                api.interruptStream(ChatState.activeConversationId).catch(() => {});
+            }
+            currentStreamController = null;
+        }
+    }
+
+    function setStreamingUI(streaming) {
+        ChatState.isStreaming = streaming;
+        const sendBtn = document.getElementById('sendBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        if (streaming) {
             sendBtn.classList.add('hidden');
             stopBtn.classList.remove('hidden');
+        } else {
+            sendBtn.classList.remove('hidden');
+            stopBtn.classList.add('hidden');
+        }
+    }
 
-            const container = document.getElementById('chatMessages');
-            const empty = container.querySelector('.empty-state');
-            if (empty) empty.remove();
-
-            // 用 insertAdjacentHTML 追加，避免 innerHTML += 重解析整个容器
-            const msgId = 'msg-' + Date.now();
-            container.insertAdjacentHTML('beforeend', `
-                <div class="message user">
-                    <div class="message-avatar">我</div>
-                    <div class="message-content">
-                        <div class="message-bubble">${renderMarkdown(content)}</div>
-                        <div class="message-time">刚刚</div>
-                    </div>
-                </div>
-                <div class="message assistant" id="${msgId}">
-                    <div class="message-avatar">AI</div>
-                    <div class="message-content">
-                        <div class="message-bubble"><span class="streaming-cursor"></span></div>
-                        <div class="message-references hidden" id="${msgId}-refs"></div>
-                        <div class="message-time">刚刚</div>
-                    </div>
-                </div>`);
-
-            const bubble = document.querySelector(`#${msgId} .message-bubble`);
-            const refsEl = document.getElementById(`${msgId}-refs`);
-            container.scrollTop = container.scrollHeight;
-
-            currentStreamController = api.streamMessage(
-                currentConvId, content, tempFileSessionId,
-                // onChunk — 仅记录文本，由 rAF 统一渲染
-                (delta, fullText) => { scheduleStreamUpdate(bubble, fullText, container); },
-                // onDone
-                (fullText, citations, interrupted) => {
-                    // 取消任何挂起的 rAF，直接做最终渲染
-                    if (streamRafId) { cancelAnimationFrame(streamRafId); streamRafId = null; }
-                    const finalText = fullText || pendingStreamText || '';
+    // ========== 流式渲染优化 (rAF + 段落缓存) ==========
+    function scheduleStreamUpdate(bubble, fullText, container) {
+        pendingStreamText = fullText;
+        if (!streamRafId) {
+            streamRafId = requestAnimationFrame(() => {
+                streamRafId = null;
+                if (pendingStreamText !== null) {
+                    performStreamUpdate(bubble, pendingStreamText, container);
                     pendingStreamText = null;
-                    lastStableHtml = '';
-                    lastStableBoundary = -1;
-
-                    bubble.innerHTML = renderMarkdown(finalText);
-
-                    if (citations && citations.length) {
-                        const courseRefs = citations.filter(c => c.source !== 'temp_file');
-                        const tempRefs = citations.filter(c => c.source === 'temp_file');
-                        let refHtml = '';
-                        if (courseRefs.length) {
-                            refHtml += '📚 引用来源: ' + courseRefs.map(r => {
-                                const name = r.doc_name || `文档${r.document_id || ''}`;
-                                const heading = r.heading_path ? ` > ${r.heading_path}` : '';
-                                return `<span title="${name}${heading}" style="cursor:help;">[${r.num}] ${name}</span>`;
-                            }).join('、') + ' ';
-                        }
-                        if (tempRefs.length) refHtml += '<span class="temp-file-badge">临时文件</span>';
-                        refsEl.innerHTML = refHtml;
-                        refsEl.classList.remove('hidden');
-                    }
-                    if (interrupted) showToast('生成已停止', 'warning');
-
-                    sendBtn.classList.remove('hidden');
-                    stopBtn.classList.add('hidden');
-                    currentStreamController = null;
-                    loadConversations(); // 后台刷新，不阻塞
-                },
-                // onError
-                (error) => {
-                    if (streamRafId) { cancelAnimationFrame(streamRafId); streamRafId = null; }
-                    pendingStreamText = null;
-                    lastStableHtml = '';
-                    lastStableBoundary = -1;
-                    bubble.innerHTML = '<em style="color:var(--gray-500)">AI 服务暂时不可用: ' + error.message + '</em>';
-                    sendBtn.classList.remove('hidden');
-                    stopBtn.classList.add('hidden');
-                    currentStreamController = null;
-                    showToast('发送失败: ' + error.message, 'error');
                 }
-            );
+            });
         }
+    }
 
-        function stopStreaming() {
-            if (currentStreamController) {
-                currentStreamController.abort();
-                if (currentConvId) {
-                    api.interruptStream(currentConvId).catch(() => {});
-                }
-                currentStreamController = null;
+    function performStreamUpdate(bubble, text, container) {
+        // 按段落边界(\n\n)分割，缓存已完成段落的 HTML
+        const boundary = text.lastIndexOf('\n\n');
+        let newHtml;
+        if (boundary > 0 && boundary !== lastStableBoundary) {
+            const stableRaw = text.slice(0, boundary);
+            const tailRaw = text.slice(boundary);
+            lastStableHtml = renderMarkdown(stableRaw);
+            lastStableBoundary = boundary;
+            newHtml = lastStableHtml + renderMarkdown(tailRaw);
+        } else if (boundary > 0 && boundary === lastStableBoundary) {
+            const tailRaw = text.slice(boundary);
+            newHtml = lastStableHtml + renderMarkdown(tailRaw);
+        } else {
+            newHtml = renderMarkdown(text);
+        }
+        // 追加流式光标
+        bubble.innerHTML = newHtml + '<span class="streaming-cursor-v2"></span>';
+        scrollToBottom();
+    }
+
+    // ========== Composer: 自动调整高度 ==========
+    function autoResizeTextarea(el) {
+        el.style.height = 'auto';
+        el.style.height = Math.min(el.scrollHeight, 200) + 'px';
+    }
+
+    function handleInputKey(e) {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            sendMessage();
+        }
+    }
+
+    // ========== Composer: 拖拽文件 ==========
+    function handleComposerDrop(e) {
+        e.preventDefault();
+        if (e.dataTransfer.files.length) {
+            // 复用文件上传逻辑
+            const fileInput = document.getElementById('tempFileInput');
+            // 由于 input[type=file] 不能通过 JS 设置 files, 我们直接处理
+            handleDroppedFiles(e.dataTransfer.files);
+        }
+    }
+
+    async function handleDroppedFiles(fileList) {
+        for (const file of Array.from(fileList)) {
+            await uploadSingleTempFile(file);
+        }
+    }
+
+    // ========== Composer: 粘贴图片 ==========
+    function handleComposerPaste(e) {
+        const items = e.clipboardData.items;
+        const imageFiles = [];
+        for (const item of items) {
+            if (item.type.startsWith('image/')) {
+                const file = item.getAsFile();
+                if (file) imageFiles.push(file);
             }
         }
-
-        // 临时文件处理
-        const MAX_TEMP_FILE_SIZE = 200 * 1024 * 1024; // 200MB
-
-        // ========== 临时文件状态轮询 ==========
-        async function pollTempFileStatus(fileId) {
-            const maxPolls = 120;  // 最多轮询 120 次（10 分钟，每 5 秒一次）
-            let pollCount = 0;
-
-            while (pollCount < maxPolls) {
-                await new Promise(resolve => setTimeout(resolve, 5000));  // 每 5 秒查询一次
-
-                try {
-                    const result = await api.getTempFileStatus(currentConvId, fileId);
-                    const status = result.data.status;
-
-                    if (status === 'done') {
-                        // 更新状态为完成
-                        const idx = tempFiles.findIndex(f => f.file_id === fileId);
-                        if (idx >= 0) {
-                            tempFiles[idx].status = 'done';
-                            tempFiles[idx].preview = result.data.preview || '';
-                        }
-                        renderTempFileBar();
-                        return;
-                    } else if (status === 'error') {
-                        const idx = tempFiles.findIndex(f => f.file_id === fileId);
-                        if (idx >= 0) {
-                            tempFiles[idx].status = 'error';
-                        }
-                        renderTempFileBar();
-                        return;
-                    }
-                    // status === 'processing' → 继续轮询
-                } catch (e) {
-                    // 网络错误时继续重试
-                }
-
-                pollCount++;
-            }
-
-            // 超时：标记为完成（后端可能已完成但状态更新丢失）
-            const idx = tempFiles.findIndex(f => f.file_id === fileId);
-            if (idx >= 0 && tempFiles[idx].status === 'processing') {
-                tempFiles[idx].status = 'done';
-                renderTempFileBar();
-            }
+        if (imageFiles.length > 0) {
+            e.preventDefault();
+            handleDroppedFiles(imageFiles);
         }
+    }
 
-        async function handleTempFileUpload(input) {
-            if (!input.files || !input.files[0]) return;
-
-            const file = input.files[0];
-            if (file.size > MAX_TEMP_FILE_SIZE) {
-                showToast(`文件过大 (${formatFileSize(file.size)})，最大支持 200MB`, 'error');
-                input.value = '';
+    // ========== 建议卡片点击 (对应 WelcomeScreen onSuggestionClick) ==========
+    async function handleSuggestion(text) {
+        if (!ChatState.activeConversationId) {
+            try {
+                const result = await api.createConversation(ChatState.currentCourseId || null, text.slice(0, 50));
+                ChatState.activeConversationId = result.data.id;
+                loadConversations();
+            } catch (e) {
+                showToast('创建对话失败', 'error');
                 return;
             }
+        }
+        document.getElementById('chatInput').value = text;
+        sendMessage();
+    }
 
-            if (!currentConvId) {
-                // 自动创建对话
-                try {
-                    const result = await api.createConversation(currentCourseId || null, '临时文件对话');
-                    currentConvId = result.data.id;
-                    await loadConversations();
-                } catch (error) {
-                    showToast('创建对话失败', 'error');
-                    input.value = '';
+    // ========== 临时文件处理 ==========
+    const MAX_TEMP_FILE_SIZE = 200 * 1024 * 1024;
+
+    async function handleTempFileUpload(input) {
+        if (!input.files || !input.files[0]) return;
+        const files = Array.from(input.files);
+        input.value = '';
+        for (const file of files) {
+            await uploadSingleTempFile(file);
+        }
+    }
+
+    async function uploadSingleTempFile(file) {
+        if (file.size > MAX_TEMP_FILE_SIZE) {
+            showToast(`文件过大 (${formatFileSize(file.size)})，最大支持 200MB`, 'error');
+            return;
+        }
+
+        // 自动创建对话
+        if (!ChatState.activeConversationId) {
+            try {
+                const result = await api.createConversation(ChatState.currentCourseId || null, '附件对话');
+                ChatState.activeConversationId = result.data.id;
+                await loadConversations();
+            } catch (e) {
+                showToast('创建对话失败', 'error');
+                return;
+            }
+        }
+
+        // 先显示"处理中"占位
+        const ext = (file.name.split('.').pop() || '').toLowerCase();
+        const tempStatusId = 'uploading-' + Date.now();
+        tempFiles.push({
+            file_id: tempStatusId,
+            filename: file.name,
+            file_type: ext,
+            file_size: file.size,
+            status: 'processing'
+        });
+        renderTempFileBar();
+
+        try {
+            const result = await api.uploadTempFile(ChatState.activeConversationId, file);
+            const fileData = result.data.file;
+            tempFileSessionId = result.data.session_id;
+
+            const idx = tempFiles.findIndex(f => f.file_id === tempStatusId);
+            if (idx >= 0) {
+                tempFiles[idx].file_id = fileData.file_id;
+                tempFiles[idx].filename = fileData.filename;
+                tempFiles[idx].file_type = fileData.file_type;
+                tempFiles[idx].file_size = fileData.file_size;
+            }
+            renderTempFileBar();
+
+            // 启动轮询
+            pollTempFileStatus(fileData.file_id);
+            showToast(`文件已接收，正在处理: ${fileData.filename}`, 'success');
+        } catch (e) {
+            const idx = tempFiles.findIndex(f => f.file_id === tempStatusId);
+            if (idx >= 0) tempFiles[idx].status = 'error';
+            renderTempFileBar();
+            showToast('文件上传失败: ' + e.message, 'error');
+        }
+    }
+
+    async function pollTempFileStatus(fileId) {
+        const maxPolls = 120;
+        let pollCount = 0;
+        while (pollCount < maxPolls) {
+            await new Promise(resolve => setTimeout(resolve, 5000));
+            try {
+                const result = await api.getTempFileStatus(ChatState.activeConversationId, fileId);
+                const status = result.data.status;
+                if (status === 'done') {
+                    const idx = tempFiles.findIndex(f => f.file_id === fileId);
+                    if (idx >= 0) { tempFiles[idx].status = 'done'; tempFiles[idx].preview = result.data.preview || ''; }
+                    renderTempFileBar();
+                    return;
+                } else if (status === 'error') {
+                    const idx = tempFiles.findIndex(f => f.file_id === fileId);
+                    if (idx >= 0) tempFiles[idx].status = 'error';
+                    renderTempFileBar();
                     return;
                 }
-            }
-
-            // 提取扩展名，先显示"处理中"状态（用临时 ID 占位）
-            const ext = (file.name.split('.').pop() || '').toLowerCase();
-            const tempStatusId = 'uploading-' + Date.now();
-            tempFiles.push({
-                file_id: tempStatusId,
-                filename: file.name,
-                file_type: ext,
-                file_size: file.size,
-                status: 'processing'
-            });
-            renderTempFileBar();
-
-            input.value = '';
-
-            try {
-                // 上传立即返回（后端异步处理），不再阻塞
-                const result = await api.uploadTempFile(currentConvId, file);
-                const fileData = result.data.file;
-                tempFileSessionId = result.data.session_id;
-
-                // 用服务器返回的真实 file_id 替换占位条目，开始轮询
-                const idx = tempFiles.findIndex(f => f.file_id === tempStatusId);
-                if (idx >= 0) {
-                    tempFiles[idx].file_id = fileData.file_id;
-                    tempFiles[idx].filename = fileData.filename;
-                    tempFiles[idx].file_type = fileData.file_type;
-                    tempFiles[idx].file_size = fileData.file_size;
-                    // 状态保持 'processing'，等待轮询更新
-                }
-                renderTempFileBar();
-
-                // 启动后台轮询（不 await，让用户继续操作）
-                pollTempFileStatus(fileData.file_id);
-
-                showToast(`文件已接收，正在后台处理: ${fileData.filename}`, 'success');
-            } catch (error) {
-                // 更新为失败状态
-                const idx = tempFiles.findIndex(f => f.file_id === tempStatusId);
-                if (idx >= 0) {
-                    tempFiles[idx].status = 'error';
-                }
-                renderTempFileBar();
-                showToast('文件上传失败: ' + error.message, 'error');
-            }
+            } catch (e) { /* retry */ }
+            pollCount++;
         }
-
-        function renderTempFileBar() {
-            const bar = document.getElementById('tempFileBar');
-            const list = document.getElementById('tempFileList');
-
-            if (tempFiles.length === 0) {
-                bar.classList.add('hidden');
-                return;
-            }
-
-            bar.classList.remove('hidden');
-            list.innerHTML = tempFiles.map(f => {
-                let statusBadge = '';
-                if (f.status === 'processing') {
-                    statusBadge = '<span class="temp-file-status processing">⏳ 处理中...</span>';
-                } else if (f.status === 'error') {
-                    statusBadge = '<span class="temp-file-status error">❌ 失败</span>';
-                }
-                // 'done' 状态不显示额外标记（界面保持简洁）
-                return `
-                    <span class="temp-file-item">
-                        ${getFileEmoji(f.file_type)} ${f.filename}
-                        ${statusBadge}
-                        <span class="temp-file-remove" onclick="removeTempFile('${f.file_id}')">&times;</span>
-                    </span>
-                `;
-            }).join('');
-        }
-
-        function removeTempFile(fileId) {
-            tempFiles = tempFiles.filter(f => f.file_id !== fileId);
-            if (tempFiles.length === 0) {
-                tempFileSessionId = null;
-            }
+        const idx = tempFiles.findIndex(f => f.file_id === fileId);
+        if (idx >= 0 && tempFiles[idx].status === 'processing') {
+            tempFiles[idx].status = 'done';
             renderTempFileBar();
         }
+    }
 
-        function clearTempFiles() {
-            tempFiles = [];
-            tempFileSessionId = null;
-            renderTempFileBar();
-            showToast('临时文件已清除', 'info');
+    function renderTempFileBar() {
+        const bar = document.getElementById('tempFileBar');
+        const list = document.getElementById('tempFileList');
+
+        if (tempFiles.length === 0) {
+            bar.classList.add('hidden');
+            return;
         }
 
-        // ========== 流式渲染优化 ==========
-        // rAF 批处理：每帧最多更新一次 DOM，合并多个 token 的累积文本
-        // 稳定内容缓存：按段落分割，已完成段落的 HTML 不重复计算
-        let lastStableHtml = '';
-        let lastStableBoundary = -1;
-
-        function scheduleStreamUpdate(bubble, fullText, container) {
-            pendingStreamText = fullText;
-            if (!streamRafId) {
-                streamRafId = requestAnimationFrame(() => {
-                    streamRafId = null;
-                    if (pendingStreamText !== null) {
-                        performStreamUpdate(bubble, pendingStreamText, container);
-                        pendingStreamText = null;
-                    }
-                });
+        bar.classList.remove('hidden');
+        list.innerHTML = tempFiles.map(f => {
+            let statusBadge = '';
+            if (f.status === 'processing') {
+                statusBadge = '<span class="temp-file-status processing">⏳</span>';
+            } else if (f.status === 'error') {
+                statusBadge = '<span class="temp-file-status error">❌</span>';
             }
+            return `
+                <span class="temp-file-item-v2">
+                    ${getFileEmoji(f.file_type)} <span class="temp-file-name">${escapeHtml(f.filename)}</span>
+                    ${statusBadge}
+                    <span class="temp-file-remove" onclick="removeTempFile('${f.file_id}')">&times;</span>
+                </span>`;
+        }).join('');
+    }
+
+    function removeTempFile(fileId) {
+        tempFiles = tempFiles.filter(f => f.file_id !== fileId);
+        if (tempFiles.length === 0) tempFileSessionId = null;
+        renderTempFileBar();
+    }
+
+    function clearTempFiles() {
+        tempFiles = [];
+        tempFileSessionId = null;
+        renderTempFileBar();
+        showToast('附件已清除', 'info');
+    }
+
+    // ========== HTML 转义工具 ==========
+    function escapeHtml(str) {
+        if (!str) return '';
+        return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    // ========== 页面可见性 & 卸载处理 ==========
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible' && currentStreamController) {
+            scrollToBottom();
         }
+    });
 
-        function performStreamUpdate(bubble, text, container) {
-            // 在最后一个段落边界处分割（双换行）
-            // 稳定部分（已完成段落）的 HTML 缓存复用，仅重渲染活动尾部
-            const boundary = text.lastIndexOf('\n\n');
-            let newHtml;
-            if (boundary > 0 && boundary !== lastStableBoundary) {
-                const stableRaw = text.slice(0, boundary);
-                const tailRaw = text.slice(boundary);
-                lastStableHtml = renderMarkdown(stableRaw);
-                lastStableBoundary = boundary;
-                newHtml = lastStableHtml + renderMarkdown(tailRaw);
-            } else if (boundary > 0 && boundary === lastStableBoundary) {
-                const tailRaw = text.slice(boundary);
-                newHtml = lastStableHtml + renderMarkdown(tailRaw);
-            } else {
-                newHtml = renderMarkdown(text);
+    window.addEventListener('beforeunload', () => {
+        if (currentStreamController) {
+            currentStreamController.abort();
+            if (ChatState.activeConversationId) {
+                navigator.sendBeacon(
+                    `${API_BASE}/conversations/${ChatState.activeConversationId}/interrupt`,
+                    new Blob([JSON.stringify({})], { type: 'application/json' })
+                );
             }
-            bubble.innerHTML = newHtml + '<span class="streaming-cursor"></span>';
-            container.scrollTop = container.scrollHeight;
+            currentStreamController = null;
         }
+    });
 
-        function handleInputKey(e) {
-            if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                sendMessage();
-            }
-        }
-
-        // ========== 页面可见性处理（防止切标签页导致流中断） ==========
-        document.addEventListener('visibilitychange', () => {
-            if (document.visibilityState === 'visible') {
-                // 切回标签页时，如果流仍在活跃，滚动到最新内容
-                if (currentStreamController) {
-                    const container = document.getElementById('chatMessages');
-                    container.scrollTop = container.scrollHeight;
-                }
-            }
-        });
-
-        // 页面卸载前确保中断流（防止连接泄露）
-        window.addEventListener('beforeunload', () => {
-            if (currentStreamController) {
-                currentStreamController.abort();
-                if (currentConvId) {
-                    // 使用 sendBeacon 确保中断请求发送
-                    navigator.sendBeacon(
-                        `${API_BASE}/conversations/${currentConvId}/interrupt`,
-                        new Blob([JSON.stringify({})], {type: 'application/json'})
-                    );
-                }
-                currentStreamController = null;
-            }
-        });
-
-        // 初始化
-        loadCourses().then(() => loadConversations());
+    // ========== 初始化 ==========
+    loadCourses().then(() => loadConversations());
     </script>
 </body>
 </html>

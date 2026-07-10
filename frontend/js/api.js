@@ -215,6 +215,13 @@ class ApiClient {
         return this.delete(`/conversations/${id}`);
     }
 
+    renameConversation(id, title) {
+        return this.request(`/conversations/${id}`, {
+            method: 'PATCH',
+            body: JSON.stringify({ title }),
+        });
+    }
+
     getMessages(convId) {
         return this.get(`/conversations/${convId}/messages`);
     }
