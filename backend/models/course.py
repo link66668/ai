@@ -31,7 +31,7 @@ class Course:
     @staticmethod
     def update(course_id, **kwargs):
         """更新课程信息"""
-        allowed_fields = {'name', 'teacher', 'semester', 'credit', 'description', 'status'}
+        allowed_fields = {'name', 'teacher', 'semester', 'credit', 'description', 'status', 'kb_enabled'}
         updates = []
         values = []
 
@@ -71,6 +71,18 @@ class Course:
         """根据课程名和用户ID查找课程（用于去重）"""
         sql = "SELECT * FROM courses WHERE name = ? AND user_id = ?"
         return db.fetch_one(sql, (name, user_id))
+
+    @staticmethod
+    def toggle_kb_enabled(course_id):
+        """切换知识库启用状态"""
+        sql = "UPDATE courses SET kb_enabled = CASE WHEN kb_enabled = 1 THEN 0 ELSE 1 END WHERE id = ?"
+        return db.update(sql, (course_id,))
+
+    @staticmethod
+    def enable_kb(course_id):
+        """启用知识库"""
+        sql = "UPDATE courses SET kb_enabled = 1 WHERE id = ? AND kb_enabled = 0"
+        return db.update(sql, (course_id,))
 
     @staticmethod
     def batch_create(user_id, courses_data):

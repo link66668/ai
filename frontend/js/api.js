@@ -162,6 +162,11 @@ class ApiClient {
         return this.post(`/courses/${id}/archive`);
     }
 
+    // 知识库开关
+    toggleKbEnabled(courseId) {
+        return this.post(`/courses/${courseId}/kb-toggle`);
+    }
+
     // 知识库
     getKnowledgeBase(courseId) {
         return this.get(`/courses/${courseId}/knowledge-base`);

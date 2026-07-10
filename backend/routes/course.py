@@ -209,6 +209,24 @@ def archive_course(current_user, course_id):
     return success_response(msg='归档成功')
 
 
+@course_bp.route('/<int:course_id>/kb-toggle', methods=['POST'])
+@token_required
+def toggle_knowledge_base(current_user, course_id):
+    """切换知识库启用状态"""
+    course = Course.find_by_id(course_id)
+    if not course:
+        return error_response('课程不存在', 404)
+
+    if course['user_id'] != current_user['id']:
+        return error_response('无权访问', 403)
+
+    Course.toggle_kb_enabled(course_id)
+    # 重新查询获取新状态
+    updated = Course.find_by_id(course_id)
+    new_enabled = bool(updated.get('kb_enabled', False)) if updated else False
+    return success_response({'kb_enabled': new_enabled}, msg='切换成功')
+
+
 @course_bp.route('/<int:course_id>/knowledge-base', methods=['GET'])
 @token_required
 def get_knowledge_base(current_user, course_id):

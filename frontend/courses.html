@@ -5,6 +5,47 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>知识库 - 课程学习助手</title>
     <link rel="stylesheet" href="css/style.css">
+    <style>
+        /* 知识库开关样式 */
+        .kb-toggle {
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+            cursor: pointer;
+            user-select: none;
+        }
+        .kb-toggle input {
+            position: absolute;
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        .kb-toggle-slider {
+            position: relative;
+            width: 32px;
+            height: 18px;
+            background: #cbd5e1;
+            border-radius: 9px;
+            transition: background 0.2s;
+        }
+        .kb-toggle-slider::after {
+            content: '';
+            position: absolute;
+            width: 14px;
+            height: 14px;
+            left: 2px;
+            top: 2px;
+            background: #fff;
+            border-radius: 50%;
+            transition: transform 0.2s;
+        }
+        .kb-toggle input:checked + .kb-toggle-slider {
+            background: var(--primary);
+        }
+        .kb-toggle input:checked + .kb-toggle-slider::after {
+            transform: translateX(14px);
+        }
+    </style>
 </head>
 <body>
     <div class="page-wrapper">
@@ -46,7 +87,7 @@
             <div class="topbar">
                 <h1>📖 知识库</h1>
                 <div class="topbar-actions">
-                    <button class="btn btn-primary" onclick="showCreateModal()">+ 新建课程</button>
+                    <button class="btn btn-primary" onclick="showCreateModal()">+ 新建知识库</button>
                 </div>
             </div>
 
@@ -74,7 +115,7 @@
     <div class="modal-overlay" id="courseModal">
         <div class="modal">
             <div class="modal-header">
-                <h3 id="modalTitle">新建课程</h3>
+                <h3 id="modalTitle">新建知识库</h3>
                 <button class="modal-close" onclick="closeModal()">&times;</button>
             </div>
             <div class="modal-body">
@@ -144,8 +185,9 @@
             }
 
             container.innerHTML = courses.map(course => {
-                // 判断知识库状态：有资料且有分块表示已建立知识库
+                // 判断知识库状态：有资料表示已建立知识库
                 const hasKnowledgeBase = course.doc_count > 0;
+                const kbEnabled = !!course.kb_enabled;
 
                 return `
                 <div class="course-card">
@@ -162,8 +204,13 @@
                     </div>
                     <div class="course-card-desc" style="white-space:pre-line; font-size:12px; line-height:1.6; max-height:120px; overflow-y:auto;">${course.description || '暂无简介'}</div>
                     <div class="course-card-footer">
-                        <span class="text-muted">📎 ${course.doc_count || 0} 份资料 ${hasKnowledgeBase ? '· ✅ 知识库就绪' : ''}</span>
-                        <div class="course-card-actions">
+                        <span class="text-muted">📎 ${course.doc_count || 0} 份资料</span>
+                        <div class="course-card-actions" style="display:flex; align-items:center; gap:8px;">
+                            <label class="kb-toggle" onclick="event.stopPropagation();" title="${kbEnabled ? '点击关闭知识库' : '点击启用知识库'}">
+                                <span style="font-size:12px; color:var(--gray-500); margin-right:4px;">📖</span>
+                                <input type="checkbox" ${kbEnabled ? 'checked' : ''} onchange="toggleKb(${course.id}, this.checked)">
+                                <span class="kb-toggle-slider"></span>
+                            </label>
                             <button type="button" class="btn btn-sm btn-primary" onclick="event.stopPropagation(); enterCourse(${course.id})">管理知识库</button>
                             <button type="button" class="btn btn-sm btn-outline" onclick="event.stopPropagation(); editCourse(${course.id})">编辑</button>
                             ${course.status === 'active'
@@ -198,7 +245,7 @@
 
         // 课程 CRUD
         function showCreateModal() {
-            document.getElementById('modalTitle').textContent = '新建课程';
+            document.getElementById('modalTitle').textContent = '新建知识库';
             document.getElementById('courseForm').reset();
             document.getElementById('courseId').value = '';
             document.getElementById('courseModal').classList.add('active');
@@ -258,6 +305,17 @@
                 loadCourses();
             } catch (error) {
                 showToast('操作失败', 'error');
+            }
+        }
+
+        // 知识库开关
+        async function toggleKb(id, enabled) {
+            try {
+                const result = await api.toggleKbEnabled(id);
+                showToast(enabled ? '知识库已启用' : '知识库已关闭', 'success');
+            } catch (error) {
+                showToast('操作失败', 'error');
+                loadCourses(); // 恢复 UI 状态
             }
         }
 

@@ -39,6 +39,7 @@ class Database:
                     credit DECIMAL(3,1) DEFAULT 0,
                     description TEXT,
                     status TEXT DEFAULT 'active' CHECK(status IN ('active', 'archived')),
+                    kb_enabled INTEGER DEFAULT 0,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE

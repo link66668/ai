@@ -646,11 +646,13 @@
     // ========== 知识库选择器 ==========
     function populateKbDropdown() {
         const listEl = document.getElementById('kbDropdownList');
-        if (!ChatState.courses || !ChatState.courses.length) {
-            listEl.innerHTML = '<div class="kb-dropdown-empty">暂无课程</div>';
+        // 只显示已启用知识库的课程
+        const kbCourses = (ChatState.courses || []).filter(c => c.kb_enabled);
+        if (!kbCourses.length) {
+            listEl.innerHTML = '<div class="kb-dropdown-empty">暂无启用的知识库<br><span style="font-size:12px;color:var(--gray-400);">请先在「知识库」页面中启用</span></div>';
             return;
         }
-        listEl.innerHTML = ChatState.courses.map(c => `
+        listEl.innerHTML = kbCourses.map(c => `
             <div class="kb-dropdown-item ${selectedKbCourseId == c.id ? 'active' : ''}"
                  data-kb-id="${c.id}"
                  onclick="selectKb('${c.id}', '${escapeHtml(c.name)}')">

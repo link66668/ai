@@ -106,6 +106,12 @@ def upload_document(current_user):
     if md_path:
         Document.update_processing(doc_id, md_path=md_path)
 
+    # 自动启用该课程的知识库
+    try:
+        Course.enable_kb(course_id)
+    except Exception as e:
+        print(f"[Document] 自动启用知识库失败: {e}")
+
     # 触发异步处理管线（所有格式都走管线，包括 txt）
     try:
         from services.async_pipeline import pipeline
