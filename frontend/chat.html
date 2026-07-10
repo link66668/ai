@@ -216,6 +216,7 @@
     }
 
     function switchCourse() {
+        clearTempFiles(true);
         ChatState.currentCourseId = document.getElementById('courseSelect').value;
         ChatState.activeConversationId = null;
         loadConversations();
@@ -229,7 +230,8 @@
             ChatState.conversations = result.data || [];
             renderConvList();
 
-            if (ChatState.conversations.length && !ChatState.activeConversationId) {
+            // 仅在没有活跃对话且未在流式传输时自动选中
+            if (ChatState.conversations.length && !ChatState.activeConversationId && !ChatState.isStreaming) {
                 selectConversation(ChatState.conversations[0].id);
             }
         } catch (e) {
@@ -262,6 +264,10 @@
     }
 
     async function selectConversation(convId) {
+        // 流式传输中不允许切换，防止 stream 回调写入错误的 DOM
+        if (ChatState.isStreaming) return;
+        // 切换对话时清空上一个对话的临时文件上下文
+        clearTempFiles(true);
         ChatState.activeConversationId = convId;
         renderConvList();
         updateTopbarTitle();
@@ -269,6 +275,7 @@
     }
 
     async function newChat() {
+        clearTempFiles(true);
         try {
             const result = await api.createConversation(ChatState.currentCourseId || null, '新对话');
             ChatState.activeConversationId = result.data.id;
@@ -286,6 +293,7 @@
             await api.deleteConversation(convId);
             ChatState.conversations = ChatState.conversations.filter(c => c.id != convId);
             if (ChatState.activeConversationId == convId) {
+                clearTempFiles(true);
                 ChatState.activeConversationId = null;
                 showWelcomeScreen();
             }
@@ -316,11 +324,18 @@
     // ========== 消息加载与渲染 (对应 MessageList + MessageBubble) ==========
     async function loadMessages() {
         if (!ChatState.activeConversationId) return;
+        // 记录发起请求时的对话 ID，防止竞态：
+        // newChat() → loadConversations() → selectConversation(old) → loadMessages()
+        // 如果在 await 期间用户切到了新对话，这次加载应丢弃
+        const requestedConvId = ChatState.activeConversationId;
         try {
-            const result = await api.getMessages(ChatState.activeConversationId);
+            const result = await api.getMessages(requestedConvId);
+            // await 返回后检查：对话是否已被切换？
+            if (ChatState.activeConversationId != requestedConvId) return;
             const messages = result.data || [];
             renderMessages(messages);
         } catch (e) {
+            if (ChatState.activeConversationId != requestedConvId) return;
             showToast('加载消息失败', 'error');
         }
     }
@@ -445,6 +460,9 @@
         showMessagesArea();
         const container = document.getElementById('chatMessages');
 
+        // 快照当前对话 ID — 流式回调中使用此值，防止竞态
+        const streamConvId = ChatState.activeConversationId;
+
         // 插入用户消息气泡
         const userMsgEl = createMessageElement({
             role: 'user',
@@ -486,7 +504,7 @@
 
         // 调用 SSE 流式 API (对应 ai.ts streamChat)
         currentStreamController = api.streamMessage(
-            ChatState.activeConversationId, content, tempFileSessionId,
+            streamConvId, content, tempFileSessionId,
 
             // onChunk — rAF 批处理渲染
             (delta, fullText) => {
@@ -791,11 +809,11 @@
         renderTempFileBar();
     }
 
-    function clearTempFiles() {
+    function clearTempFiles(silent = false) {
         tempFiles = [];
         tempFileSessionId = null;
         renderTempFileBar();
-        showToast('附件已清除', 'info');
+        if (!silent) showToast('附件已清除', 'info');
     }
 
     // ========== HTML 转义工具 ==========
