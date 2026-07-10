@@ -651,15 +651,6 @@ table tbody tr:hover {
     text-align: right;
 }
 
-.message-references {
-    margin-top: 8px;
-    padding: 8px 12px;
-    background: var(--gray-50);
-    border-radius: var(--radius);
-    font-size: 12px;
-    color: var(--gray-600);
-}
-
 .chat-input-area {
     padding: 16px;
     border-top: 1px solid var(--gray-200);
@@ -1099,16 +1090,6 @@ table tbody tr:hover {
     border-radius: 6px !important;
     height: 32px;
 }
-.chat-provider-badge {
-    display: inline-flex;
-    align-items: center;
-    padding: 2px 10px;
-    border-radius: 12px;
-    background: var(--gray-100);
-    color: var(--gray-500);
-    font-size: 12px;
-    white-space: nowrap;
-}
 
 /* 聊天主体 */
 .chat-body {
@@ -1504,16 +1485,79 @@ table tbody tr:hover {
     padding: 0 4px;
 }
 
-/* 消息引用 */
+/* 知识库来源面板 — 当回答引用课程资料时显示 */
 .msg-refs {
-    font-size: 12px;
-    color: var(--gray-500);
-    padding: 4px 10px;
-    background: var(--gray-50);
-    border-radius: 6px;
-    margin-bottom: 4px;
+    margin: 8px 0 6px;
+    border: 1px solid var(--gray-200);
+    border-radius: 8px;
+    background: #f0f4ff;
+    overflow: hidden;
 }
 .msg-refs.hidden { display: none; }
+
+.msg-refs-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--primary);
+    background: rgba(79, 70, 229, 0.06);
+    border-bottom: 1px solid var(--gray-200);
+}
+.msg-refs-header .kb-icon { font-size: 14px; }
+
+.msg-refs-list {
+    padding: 6px 10px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.msg-refs-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 12px;
+    color: var(--gray-700);
+    background: #fff;
+    border: 1px solid var(--gray-200);
+    border-radius: 4px;
+    padding: 2px 8px 2px 4px;
+    line-height: 1.6;
+}
+.msg-refs-item .ref-num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 16px;
+    height: 16px;
+    font-size: 10px;
+    font-weight: 700;
+    color: #fff;
+    background: var(--primary);
+    border-radius: 3px;
+    padding: 0 3px;
+}
+.msg-refs-item .ref-name {
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.msg-refs-item .ref-heading {
+    color: var(--gray-400);
+    font-size: 11px;
+    max-width: 120px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.msg-refs-item:hover {
+    border-color: var(--primary-light);
+    background: var(--gray-50);
+}
 
 /* 流式加载动画 — 弹跳圆点 */
 .streaming-dots {
@@ -2191,19 +2235,6 @@ table tbody tr:hover {
     max-width: 100%;
     border-radius: 6px;
     margin: 8px 0;
-}
-
-/* 消息引用区域 */
-.message-references {
-    font-size: 12px;
-    color: var(--gray-600);
-    margin-top: 6px;
-    padding: 6px 10px;
-    background: var(--gray-50);
-    border-radius: 6px;
-}
-.message-references.hidden {
-    display: none;
 }
 
 /* ========== Badge ========== */

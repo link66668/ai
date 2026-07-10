@@ -322,7 +322,7 @@ class ApiClient {
             body: JSON.stringify({
                 content: content,
                 temp_file_session_id: tempFileSessionId,
-                kb_course_id: kbCourseId || null
+                kb_course_id: kbCourseId
             }),
             signal: controller.signal
         }).then(async (response) => {

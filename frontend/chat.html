@@ -56,7 +56,6 @@
                     <select class="form-control course-select-mini" id="courseSelect" onchange="switchCourse()">
                         <option value="">通用对话</option>
                     </select>
-                    <span class="chat-provider-badge" id="providerBadge" style="display:none;"></span>
                 </div>
             </div>
 
@@ -174,25 +173,15 @@
     <script src="js/utils.js"></script>
     <script>
     /* ================================================================
-     *  chat.html — 仿照 chat-app 架构重写的对话页面
-     *
-     *  核心逻辑映射:
-     *    chatStore.ts   → ChatState 对象 (conversations, activeId, isStreaming)
-     *    useChat.ts     → send() / stopStreaming() 函数
-     *    ai.ts          → api.streamMessage() (SSE via fetch + ReadableStream)
-     *    ChatWindow.tsx  → 本文件的 HTML + 渲染函数
-     *    MessageBubble   → renderMessageBubble()
-     *    MessageList     → renderMessages() + auto-scroll
-     *    Composer        → #chatComposer 区域
-     *    WelcomeScreen   → #chatWelcome 区域
+     *  chat.html — 对话页面
      * ================================================================ */
 
     if (!checkAuth()) throw new Error('未登录');
 
-    // ========== 全局状态 (对应 chatStore.ts) ==========
+    // ========== 全局状态 ==========
     const ChatState = {
-        conversations: [],          // Conversation[]
-        activeConversationId: null, // string | null
+        conversations: [],
+        activeConversationId: null,
         isStreaming: false,         // boolean
         currentCourseId: getUrlParam('course_id') || '',
         courses: [],
@@ -204,7 +193,7 @@
     let tempFiles = [];             // [{file_id, filename, file_type, file_size, status, preview}]
 
     // ========== 知识库选择状态 ==========
-    let selectedKbCourseId = '';    // 当前选中的知识库课程 ID，空字符串表示不引用
+    let selectedKbCourseId;    // undefined=未选(纯AI对话) / ''=不引用 / <id>=指定课程知识库
 
     // 流式渲染优化 (rAF 批处理 + 稳定内容缓存)
     let streamRafId = null;
@@ -240,7 +229,7 @@
         showWelcomeScreen();
     }
 
-    // ========== 对话列表 (对应 chatStore actions) ==========
+    // ========== 对话列表 ==========
     async function loadConversations() {
         try {
             const result = await api.getConversations(ChatState.currentCourseId || undefined);
@@ -338,7 +327,7 @@
         document.getElementById('chatMessages').classList.remove('hidden');
     }
 
-    // ========== 消息加载与渲染 (对应 MessageList + MessageBubble) ==========
+    // ========== 消息加载与渲染 ==========
     async function loadMessages() {
         if (!ChatState.activeConversationId) return;
         // 记录发起请求时的对话 ID，防止竞态：
@@ -380,7 +369,7 @@
     }
 
     /**
-     * 创建单条消息 DOM (对应 MessageBubble.tsx)
+     * 创建单条消息 DOM
      */
     function createMessageElement(msg) {
         const isUser = msg.role === 'user';
@@ -449,20 +438,20 @@
         if (anchor) anchor.scrollIntoView({ behavior: 'smooth' });
     }
 
-    // ========== 发送消息 (对应 useChat.ts send()) ==========
+    // ========== 发送消息 ==========
     async function sendMessage() {
         const input = document.getElementById('chatInput');
         const content = input.value.trim();
         if (!content && tempFiles.length === 0) return;
         if (ChatState.isStreaming) return;
 
-        // 确保有活跃对话 (对应 chatStore createConversation)
+        // 确保有活跃对话
         if (!ChatState.activeConversationId) {
             try {
                 const title = content ? content.slice(0, 50) : '新对话';
                 const result = await api.createConversation(ChatState.currentCourseId || null, title);
                 ChatState.activeConversationId = result.data.id;
-                loadConversations(); // 并行刷新列表
+                await loadConversations();
             } catch (e) {
                 showToast('创建对话失败', 'error');
                 return;
@@ -473,9 +462,13 @@
         input.value = '';
         input.style.height = 'auto';
 
-        // 切换到消息区域
-        showMessagesArea();
+        // 清空消息区旧消息：仅从欢迎页首次发送时清空
         const container = document.getElementById('chatMessages');
+        const fromWelcome = !document.getElementById('chatWelcome').classList.contains('hidden');
+        if (fromWelcome) {
+            container.innerHTML = '<div class="chat-scroll-anchor" id="scrollAnchor"></div>';
+        }
+        showMessagesArea();
 
         // 快照当前对话 ID — 流式回调中使用此值，防止竞态
         const streamConvId = ChatState.activeConversationId;
@@ -488,7 +481,7 @@
             created_at: new Date().toISOString()
         });
 
-        // 插入 AI 占位气泡 (带加载动画，对应 MessageBubble 的 streaming bouncing dots)
+        // 插入 AI 占位气泡 (带加载动画)
         const aiMsgId = 'msg-streaming-' + Date.now();
         const aiMsgEl = document.createElement('div');
         aiMsgEl.className = 'msg-v2 msg-assistant';
@@ -519,9 +512,9 @@
         const bubble = aiMsgEl.querySelector('.msg-bubble');
         const refsEl = document.getElementById(`${aiMsgId}-refs`);
 
-        // 调用 SSE 流式 API (对应 ai.ts streamChat)
+        // 调用 SSE 流式 API
         currentStreamController = api.streamMessage(
-            streamConvId, content, tempFileSessionId, selectedKbCourseId || null,
+            streamConvId, content, tempFileSessionId, selectedKbCourseId,
 
             // onChunk — rAF 批处理渲染
             (delta, fullText) => {
@@ -539,19 +532,34 @@
                 // 替换 streaming dots 为最终 markdown
                 bubble.innerHTML = renderMarkdown(finalText);
 
-                // 显示引用来源
+                // 显示引用来源 — 知识库文件来源卡片
                 if (citations && citations.length) {
                     const courseRefs = citations.filter(c => c.source !== 'temp_file');
                     const tempRefs = citations.filter(c => c.source === 'temp_file');
                     let refHtml = '';
+
                     if (courseRefs.length) {
-                        refHtml += '📚 引用来源: ' + courseRefs.map(r => {
-                            const name = r.doc_name || `文档${r.document_id || ''}`;
-                            const heading = r.heading_path ? ` > ${r.heading_path}` : '';
-                            return `<span title="${escapeHtml(name + heading)}" style="cursor:help;">[${r.num}] ${escapeHtml(name)}</span>`;
-                        }).join('、') + ' ';
+                        refHtml += '<div class="msg-refs-header">'
+                            + '<span class="kb-icon">📖</span> 知识库来源'
+                            + '</div>'
+                            + '<div class="msg-refs-list">'
+                            + courseRefs.map(r => {
+                                const name = r.doc_name || `文档${r.document_id || ''}`;
+                                const heading = r.heading_path
+                                    ? ` <span class="ref-heading">› ${escapeHtml(r.heading_path)}</span>`
+                                    : '';
+                                return `<span class="msg-refs-item">`
+                                    + `<span class="ref-num">${r.num}</span>`
+                                    + `<span class="ref-name" title="${escapeHtml(name)}">${escapeHtml(name)}</span>`
+                                    + heading
+                                    + `</span>`;
+                            }).join('') + '</div>';
                     }
-                    if (tempRefs.length) refHtml += '<span class="temp-file-badge">临时文件</span>';
+
+                    if (tempRefs.length) {
+                        refHtml += '<span class="temp-file-badge" style="margin:4px 8px;">📎 临时文件</span>';
+                    }
+
                     refsEl.innerHTML = refHtml;
                     refsEl.classList.remove('hidden');
                 }
@@ -560,7 +568,6 @@
 
                 setStreamingUI(false);
                 currentStreamController = null;
-                loadConversations(); // 后台刷新
             },
 
             // onError
@@ -738,7 +745,7 @@
         }
     }
 
-    // ========== 建议卡片点击 (对应 WelcomeScreen onSuggestionClick) ==========
+    // ========== 建议卡片点击 ==========
     async function handleSuggestion(text) {
         if (!ChatState.activeConversationId) {
             try {

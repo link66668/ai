@@ -226,9 +226,17 @@ def send_message_stream(current_user, conv_id):
     from models.user_ai_config import UserAIConfig
     ai_config = UserAIConfig.get_effective_config(current_user['id'])
 
-    # 确定 RAG 知识库: 用户显式选择的 kb_course_id 优先，
-    # 否则回退到对话所属课程（如果用户没有主动选"不引用"）
-    rag_course_id = kb_course_id if kb_course_id is not None else conv.get('course_id')
+    # 确定 RAG 知识库 — 仅由左下角知识库选择器控制：
+    #   kb_course_id = ''    → 用户明确选了"不引用"，禁用 RAG
+    #   kb_course_id = <id>  → 用户选了特定课程作为知识库
+    #   kb_course_id = None  → 未选择，不使用 RAG
+    # 注意：右上角课程选择器只控制对话归属和列表过滤，不影响 RAG。
+    if kb_course_id == '':
+        rag_course_id = None  # 明确禁用 RAG
+    elif kb_course_id is not None:
+        rag_course_id = kb_course_id  # 使用用户选定的知识库
+    else:
+        rag_course_id = None  # 未选择 → 不检索知识库，纯 AI 对话
 
     # ---- Step 4: chat_engine 管线 (resolve_context → build_messages → stream) ----
     stream_gen, citations = chat_engine.process(
