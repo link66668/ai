@@ -64,11 +64,6 @@
                     <h4>对话记录</h4>
                     <div class="stat-value" id="chatCount">0</div>
                 </div>
-                <div class="stat-card">
-                    <div class="stat-icon purple">📅</div>
-                    <h4>学习计划</h4>
-                    <div class="stat-value" id="planCount">0</div>
-                </div>
             </div>
 
             <!-- 快捷入口 -->
@@ -133,20 +128,18 @@
                 }
             }
 
-            let courses = [], tasks = [], chats = [], plans = [];
+            let courses = [], tasks = [], chats = [];
 
             await Promise.all([
                 safeCall(() => api.getCourses(), data => { courses = data; }),
                 safeCall(() => api.getTasks(), data => { tasks = data; }),
                 safeCall(() => api.getConversations(), data => { chats = data; }),
-                safeCall(() => api.getPlans(), data => { plans = data; }),
             ]);
 
             // 更新统计
             document.getElementById('courseCount').textContent = courses.length;
             document.getElementById('taskCount').textContent = tasks.filter(t => t.status !== '已完成').length;
             document.getElementById('chatCount').textContent = chats.length;
-            document.getElementById('planCount').textContent = plans.length;
 
             // 渲染近期任务
             const recentTasks = tasks.filter(t => t.status !== '已完成').slice(0, 5);

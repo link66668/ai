@@ -226,10 +226,6 @@ class ApiClient {
         return this.get(`/conversations/${convId}/messages`);
     }
 
-    sendMessage(convId, content) {
-        return this.post(`/conversations/${convId}/messages`, { content });
-    }
-
     // 任务相关
     getTasks(status, courseId) {
         const params = {};

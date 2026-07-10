@@ -54,12 +54,3 @@ class Message:
         """查找对话的所有消息"""
         sql = "SELECT * FROM messages WHERE conversation_id = ? ORDER BY created_at ASC"
         return db.fetch_all(sql, (conv_id,))
-
-    @staticmethod
-    def get_references(msg_id):
-        """获取消息引用的资料"""
-        sql = "SELECT \"references\" FROM messages WHERE id = ?"
-        result = db.fetch_one(sql, (msg_id,))
-        if result and result['references']:
-            return json.loads(result['references'])
-        return []

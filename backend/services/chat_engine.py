@@ -201,30 +201,6 @@ class ChatEngine:
         gen = self.stream(messages, ctx.citations, ai_config)
         return gen, ctx.citations
 
-    def process_blocking(self, message, course_id=None, conversation_history=None,
-                         temp_file_session_id=None, ai_config=None):
-        """阻塞式管线 — 返回完整文本"""
-        ctx = self.resolve_context(message, course_id, temp_file_session_id, ai_config)
-        messages = self.build_messages(message, ctx, conversation_history)
-
-        from services.streaming_service import streaming_service
-        has_images = self._messages_have_images(messages)
-
-        try:
-            response_text = streaming_service.blocking_chat(messages, ai_config=ai_config)
-        except Exception as e:
-            logger.warning(f"[ChatEngine] 阻塞调用失败: {e}")
-            if has_images:
-                text_messages = self._strip_images(messages)
-                try:
-                    response_text = streaming_service.blocking_chat(text_messages, ai_config=ai_config)
-                except Exception:
-                    response_text = self._mock_response(message)
-            else:
-                response_text = self._mock_response(message)
-
-        return {'response': response_text, 'citations': ctx.citations}
-
     # ==================== 内部: 上下文获取 ====================
 
     def _get_temp_file_text(self, session_id):

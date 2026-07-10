@@ -116,69 +116,6 @@ def get_messages(current_user, conv_id):
 
     return success_response(messages)
 
-@chat_bp.route('/<int:conv_id>/messages', methods=['POST'])
-@token_required
-def send_message(current_user, conv_id):
-    """
-    发送消息（阻塞模式，非流式）
-
-    使用 chat_engine.process_blocking() — 支持 RAG + LLM
-    """
-    from services.chat_engine import chat_engine
-
-    conv = Conversation.find_by_id(conv_id)
-    if not conv:
-        return error_response('对话不存在', 404)
-
-    if conv['user_id'] != current_user['id']:
-        return error_response('无权访问', 403)
-
-    data = request.get_json()
-    if not data:
-        return error_response('请求数据为空')
-
-    content = data.get('content', '').strip()
-    if not content:
-        return error_response('消息内容不能为空')
-
-    # 保存用户消息
-    Message.create(conv_id, 'user', content)
-
-    # 获取历史
-    history = Message.find_by_conversation(conv_id)
-    history_list = [{'role': m['role'], 'content': m['content']} for m in history[-10:]]
-
-    # 获取 AI 配置
-    from models.user_ai_config import UserAIConfig
-    ai_config = UserAIConfig.get_effective_config(current_user['id'])
-
-    # chat_engine 阻塞管线
-    result = chat_engine.process_blocking(
-        message=content,
-        course_id=conv.get('course_id'),
-        conversation_history=history_list,
-        ai_config=ai_config,
-    )
-
-    # 保存 AI 回复
-    refs = [
-        {'num': c.get('num'), 'document_id': c.get('document_id', ''),
-         'heading_path': c.get('heading_path', ''), 'source': c.get('source', 'course_kb')}
-        for c in result.get('citations', [])
-    ]
-    msg_id = Message.create(conv_id, 'assistant', result['response'], refs or None)
-
-    # 首条消息 → 自动标题
-    if len(history) <= 1:
-        title = content[:20] + ('...' if len(content) > 20 else '')
-        Conversation.update_title(conv_id, title)
-
-    return success_response({
-        'id': msg_id,
-        'content': result['response'],
-        'references': refs,
-    })
-
 
 # ========== 流式 + 临时文件 + 中断端点 ==========
 

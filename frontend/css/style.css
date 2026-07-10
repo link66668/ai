@@ -1940,17 +1940,6 @@ table tbody tr:hover {
 
 /* ========== 流式输出 + 临时文件 + 引用渲染 ========== */
 
-/* 闪烁光标 */
-.streaming-cursor::after {
-    content: '▌';
-    animation: blink 1s infinite;
-    color: var(--primary);
-}
-@keyframes blink {
-    0%, 50% { opacity: 1; }
-    51%, 100% { opacity: 0; }
-}
-
 /* 引用标记 */
 .citation {
     font-size: 0.75em;
@@ -2017,17 +2006,6 @@ table tbody tr:hover {
     gap: 6px;
     flex-wrap: wrap;
     flex: 1;
-}
-.temp-file-item {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    padding: 2px 10px;
-    background: white;
-    border: 1px solid var(--gray-200);
-    border-radius: 16px;
-    font-size: 12px;
-    white-space: nowrap;
 }
 .temp-file-remove {
     cursor: pointer;
