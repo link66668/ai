@@ -1681,6 +1681,95 @@ table tbody tr:hover {
     text-overflow: ellipsis;
 }
 
+/* ==================== 知识库选择器 ==================== */
+.kb-selector-wrapper {
+    position: relative;
+}
+.kb-selector-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    border: 1px solid var(--gray-300);
+    border-radius: 16px;
+    background: var(--white);
+    cursor: pointer;
+    font-size: 12px;
+    color: var(--gray-500);
+    transition: all 0.15s;
+    height: 30px;
+    white-space: nowrap;
+}
+.kb-selector-btn:hover {
+    border-color: var(--primary);
+    color: var(--primary);
+}
+.kb-selector-btn.kb-active {
+    background: rgba(79, 70, 229, 0.08);
+    border-color: var(--primary);
+    color: var(--primary);
+}
+.kb-selector-btn svg {
+    flex-shrink: 0;
+}
+.kb-selector-label {
+    max-width: 80px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.kb-dropdown {
+    position: absolute;
+    bottom: 100%;
+    left: 0;
+    margin-bottom: 6px;
+    min-width: 180px;
+    max-height: 260px;
+    overflow-y: auto;
+    background: var(--white);
+    border: 1px solid var(--gray-200);
+    border-radius: 10px;
+    box-shadow: var(--shadow-lg);
+    z-index: 100;
+    padding: 4px;
+}
+.kb-dropdown.hidden {
+    display: none;
+}
+.kb-dropdown-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    color: var(--gray-700);
+    transition: background 0.1s;
+}
+.kb-dropdown-item:hover {
+    background: var(--gray-100);
+}
+.kb-dropdown-item.active {
+    background: rgba(79, 70, 229, 0.08);
+    color: var(--primary);
+    font-weight: 500;
+}
+.kb-dropdown-divider {
+    height: 1px;
+    background: var(--gray-200);
+    margin: 4px 8px;
+}
+.kb-dropdown-empty {
+    padding: 12px;
+    text-align: center;
+    color: var(--gray-400);
+    font-size: 13px;
+}
+.kb-item-icon {
+    font-size: 14px;
+    flex-shrink: 0;
+}
+
 /* ==================== 响应式 (chat-app 适配) ==================== */
 @media (max-width: 900px) {
     .conv-sidebar {

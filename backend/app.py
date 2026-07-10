@@ -1,6 +1,8 @@
 from flask import Flask, send_from_directory, jsonify, request
 from flask_cors import CORS
 import os
+import glob
+import shutil
 import traceback
 from dotenv import load_dotenv
 
@@ -116,6 +118,81 @@ def create_app():
     return app
 
 
+def cleanup_orphaned_indexes():
+    """
+    清理孤立的磁盘索引和文件
+
+    当数据库被删除重建后，chroma_data/、bm25_indexes/、uploads/ 中的旧数据
+    仍然存在。如果新课程恰好获得了相同的自增 ID，就会"继承"旧的知识库数据。
+
+    本函数在启动时检测并清理数据库中已不存在的课程对应的磁盘数据。
+    """
+    from database import db
+
+    try:
+        # 获取数据库中所有有效的课程 ID
+        courses = db.fetch_all("SELECT id FROM courses") or []
+        valid_ids = {c['id'] for c in courses}
+        print(f'[清理] 数据库中有效课程 ID: {valid_ids or "(空)"}')
+
+        cleaned = 0
+
+        # ① 清理孤立的 BM25 索引文件 (course_{id}.pkl)
+        bm25_dir = Config.BM25_INDEX_PATH
+        if os.path.isdir(bm25_dir):
+            for pkl_path in glob.glob(os.path.join(bm25_dir, 'course_*.pkl')):
+                filename = os.path.basename(pkl_path)  # course_3.pkl
+                try:
+                    cid = int(filename.replace('course_', '').replace('.pkl', ''))
+                    if cid not in valid_ids:
+                        os.remove(pkl_path)
+                        print(f'[清理] 删除孤立 BM25 索引: {filename} (课程 {cid} 不存在)')
+                        cleaned += 1
+                except (ValueError, OSError):
+                    pass
+
+        # ② 清理孤立的 ChromaDB collections (course_{id})
+        chroma_dir = Config.CHROMA_DATA_PATH
+        if os.path.isdir(chroma_dir):
+            try:
+                import chromadb
+                client = chromadb.PersistentClient(path=chroma_dir)
+                for col in client.list_collections():
+                    name = col.name if hasattr(col, 'name') else str(col)
+                    if name.startswith('course_'):
+                        try:
+                            cid = int(name.replace('course_', ''))
+                            if cid not in valid_ids:
+                                client.delete_collection(name)
+                                print(f'[清理] 删除孤立 ChromaDB collection: {name} (课程 {cid} 不存在)')
+                                cleaned += 1
+                        except (ValueError, Exception):
+                            pass
+            except ImportError:
+                pass  # chromadb 未安装
+            except Exception as e:
+                print(f'[清理] ChromaDB 清理失败: {e}')
+
+        # ③ 如果数据库中完全没有课程，也清理 uploads 中的课程子目录
+        if not valid_ids:
+            uploads_dir = Config.UPLOAD_FOLDER
+            if os.path.isdir(uploads_dir):
+                for entry in os.listdir(uploads_dir):
+                    entry_path = os.path.join(uploads_dir, entry)
+                    if os.path.isdir(entry_path):
+                        shutil.rmtree(entry_path, ignore_errors=True)
+                        print(f'[清理] 删除孤立上传目录: {entry}/')
+                        cleaned += 1
+
+        if cleaned > 0:
+            print(f'[清理] 共清理 {cleaned} 个孤立磁盘资源')
+        else:
+            print('[清理] 磁盘数据与数据库一致，无需清理')
+
+    except Exception as e:
+        print(f'[清理] 清理失败（不影响启动）: {e}')
+
+
 def init_demo_data():
     """初始化演示数据"""
     try:
@@ -187,6 +264,8 @@ if __name__ == '__main__':
 
     # 初始化演示数据
     with app.app_context():
+        # 清理孤立的磁盘索引（数据库删除重建后，旧的 BM25/ChromaDB/uploads 可能残留）
+        cleanup_orphaned_indexes()
         init_demo_data()
         # 初始化异步处理管线
         from services.async_pipeline import pipeline

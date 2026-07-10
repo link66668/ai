@@ -303,12 +303,13 @@ class ApiClient {
      * @param {number} convId - 对话ID
      * @param {string} content - 消息内容
      * @param {string} tempFileSessionId - 临时文件会话ID（可选）
+     * @param {string|null} kbCourseId - 引用知识库的课程ID（可选，null=不引用）
      * @param {function} onChunk - 每收到一个token的回调 (delta, fullText)
      * @param {function} onDone - 流结束回调 (fullText, citations)
      * @param {function} onError - 错误回调 (error)
      * @returns {AbortController} 用于中断的控制器
      */
-    streamMessage(convId, content, tempFileSessionId, onChunk, onDone, onError) {
+    streamMessage(convId, content, tempFileSessionId, kbCourseId, onChunk, onDone, onError) {
         const token = this.getToken();
         const controller = new AbortController();
 
@@ -320,7 +321,8 @@ class ApiClient {
             },
             body: JSON.stringify({
                 content: content,
-                temp_file_session_id: tempFileSessionId
+                temp_file_session_id: tempFileSessionId,
+                kb_course_id: kbCourseId || null
             }),
             signal: controller.signal
         }).then(async (response) => {

@@ -209,6 +209,7 @@ def send_message_stream(current_user, conv_id):
 
     content = data.get('content', '').strip()
     temp_file_session_id = data.get('temp_file_session_id')
+    kb_course_id = data.get('kb_course_id')  # 用户选择的知识库课程 ID（可选）
 
     # 允许纯文件上传（无文字消息），但不能两者都为空
     if not content and not temp_file_session_id:
@@ -225,10 +226,14 @@ def send_message_stream(current_user, conv_id):
     from models.user_ai_config import UserAIConfig
     ai_config = UserAIConfig.get_effective_config(current_user['id'])
 
+    # 确定 RAG 知识库: 用户显式选择的 kb_course_id 优先，
+    # 否则回退到对话所属课程（如果用户没有主动选"不引用"）
+    rag_course_id = kb_course_id if kb_course_id is not None else conv.get('course_id')
+
     # ---- Step 4: chat_engine 管线 (resolve_context → build_messages → stream) ----
     stream_gen, citations = chat_engine.process(
         message=content,
-        course_id=conv.get('course_id'),
+        course_id=rag_course_id,
         conversation_history=history_list,
         temp_file_session_id=temp_file_session_id,
         ai_config=ai_config,

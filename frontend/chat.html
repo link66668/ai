@@ -134,6 +134,20 @@
                                 <input type="file" id="tempFileInput" style="display:none"
                                     accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.jpg,.jpeg,.png,.gif"
                                     onchange="handleTempFileUpload(this)" multiple>
+                                <!-- 知识库选择按钮 -->
+                                <div class="kb-selector-wrapper">
+                                    <button class="kb-selector-btn" id="kbSelectorBtn" onclick="toggleKbMenu(event)" title="选择引用知识库">
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+                                        <span class="kb-selector-label" id="kbLabel">不引用</span>
+                                    </button>
+                                    <div class="kb-dropdown hidden" id="kbDropdown">
+                                        <div class="kb-dropdown-item active" data-kb-id="" onclick="selectKb('', '不引用')">
+                                            <span class="kb-item-icon">🚫</span> 不引用知识库
+                                        </div>
+                                        <div class="kb-dropdown-divider"></div>
+                                        <div id="kbDropdownList"><!-- 动态填充课程列表 --></div>
+                                    </div>
+                                </div>
                             </div>
                             <!-- 文本输入 -->
                             <textarea class="composer-textarea" id="chatInput"
@@ -188,6 +202,9 @@
     let currentStreamController = null;
     let tempFileSessionId = null;
     let tempFiles = [];             // [{file_id, filename, file_type, file_size, status, preview}]
+
+    // ========== 知识库选择状态 ==========
+    let selectedKbCourseId = '';    // 当前选中的知识库课程 ID，空字符串表示不引用
 
     // 流式渲染优化 (rAF 批处理 + 稳定内容缓存)
     let streamRafId = null;
@@ -504,7 +521,7 @@
 
         // 调用 SSE 流式 API (对应 ai.ts streamChat)
         currentStreamController = api.streamMessage(
-            streamConvId, content, tempFileSessionId,
+            streamConvId, content, tempFileSessionId, selectedKbCourseId || null,
 
             // onChunk — rAF 批处理渲染
             (delta, fullText) => {
@@ -618,6 +635,62 @@
         bubble.innerHTML = newHtml + '<span class="streaming-cursor-v2"></span>';
         scrollToBottom();
     }
+
+    // ========== 知识库选择器 ==========
+    function populateKbDropdown() {
+        const listEl = document.getElementById('kbDropdownList');
+        if (!ChatState.courses || !ChatState.courses.length) {
+            listEl.innerHTML = '<div class="kb-dropdown-empty">暂无课程</div>';
+            return;
+        }
+        listEl.innerHTML = ChatState.courses.map(c => `
+            <div class="kb-dropdown-item ${selectedKbCourseId == c.id ? 'active' : ''}"
+                 data-kb-id="${c.id}"
+                 onclick="selectKb('${c.id}', '${escapeHtml(c.name)}')">
+                <span class="kb-item-icon">📖</span> ${escapeHtml(c.name)}
+            </div>
+        `).join('');
+    }
+
+    function toggleKbMenu(event) {
+        event.stopPropagation();
+        const dropdown = document.getElementById('kbDropdown');
+        if (dropdown.classList.contains('hidden')) {
+            populateKbDropdown();
+            dropdown.classList.remove('hidden');
+        } else {
+            dropdown.classList.add('hidden');
+        }
+    }
+
+    function selectKb(courseId, courseName) {
+        selectedKbCourseId = courseId;
+        const label = document.getElementById('kbLabel');
+        const btn = document.getElementById('kbSelectorBtn');
+
+        if (courseId) {
+            label.textContent = courseName;
+            btn.classList.add('kb-active');
+        } else {
+            label.textContent = '不引用';
+            btn.classList.remove('kb-active');
+        }
+
+        // 更新 dropdown 中的 active 状态
+        document.querySelectorAll('.kb-dropdown-item').forEach(el => {
+            el.classList.toggle('active', el.dataset.kbId == courseId);
+        });
+
+        document.getElementById('kbDropdown').classList.add('hidden');
+    }
+
+    // 点击外部关闭知识库下拉菜单
+    document.addEventListener('click', (e) => {
+        const wrapper = document.querySelector('.kb-selector-wrapper');
+        if (wrapper && !wrapper.contains(e.target)) {
+            document.getElementById('kbDropdown').classList.add('hidden');
+        }
+    });
 
     // ========== Composer: 自动调整高度 ==========
     function autoResizeTextarea(el) {
