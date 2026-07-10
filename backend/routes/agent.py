@@ -68,27 +68,6 @@ def extract_knowledge(current_user):
     points = ai_service.extract_knowledge_points(text)
     return success_response({'knowledge_points': points})
 
-@agent_bp.route('/generate-plan', methods=['POST'])
-@token_required
-def generate_plan(current_user):
-    """生成学习计划"""
-    from services.ai_service import ai_service
-
-    data = request.get_json()
-    if not data:
-        return error_response('请求数据为空')
-
-    course_name = data.get('course_name', '').strip()
-    goal = data.get('goal', '').strip()
-    exam_date = data.get('exam_date')
-    daily_hours = data.get('daily_hours', 2.0)
-
-    if not course_name:
-        return error_response('课程名称不能为空')
-
-    result = ai_service.generate_study_plan(course_name, goal, exam_date, daily_hours)
-    return success_response(result)
-
 @agent_bp.route('/decompose-task', methods=['POST'])
 @token_required
 def decompose_task(current_user):

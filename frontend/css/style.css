@@ -981,53 +981,6 @@ table tbody tr:hover {
     color: var(--gray-500);
 }
 
-/* ==================== 学习计划 ==================== */
-.plan-timeline {
-    position: relative;
-    padding-left: 30px;
-}
-
-.plan-timeline::before {
-    content: '';
-    position: absolute;
-    left: 10px;
-    top: 0;
-    bottom: 0;
-    width: 2px;
-    background: var(--gray-200);
-}
-
-.plan-phase {
-    position: relative;
-    margin-bottom: 24px;
-    padding: 16px;
-    background: var(--white);
-    border-radius: var(--radius);
-    box-shadow: var(--shadow);
-}
-
-.plan-phase::before {
-    content: '';
-    position: absolute;
-    left: -24px;
-    top: 20px;
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-    background: var(--primary);
-    border: 2px solid var(--white);
-}
-
-.plan-phase h4 {
-    font-size: 16px;
-    margin-bottom: 4px;
-}
-
-.plan-phase p {
-    color: var(--gray-600);
-    font-size: 14px;
-}
-
 /* ==================== 响应式 ==================== */
 @media (max-width: 768px) {
     .sidebar {

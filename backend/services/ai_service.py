@@ -158,59 +158,6 @@ class AIService:
 
         return points
 
-    def generate_study_plan(self, course_name, goal, exam_date, daily_hours):
-        """生成学习计划"""
-        from datetime import datetime, timedelta
-
-        # 计算距离考试的天数
-        if exam_date:
-            exam = datetime.strptime(exam_date, '%Y-%m-%d')
-            days_left = (exam - datetime.now()).days
-        else:
-            days_left = 30  # 默认30天
-
-        # 生成计划
-        plan = {
-            'course': course_name,
-            'goal': goal,
-            'total_days': days_left,
-            'daily_hours': daily_hours,
-            'phases': []
-        }
-
-        # 分阶段
-        if days_left >= 30:
-            phases = [
-                {'name': '基础阶段', 'days': days_left // 3, 'focus': '系统学习基础知识'},
-                {'name': '提高阶段', 'days': days_left // 3, 'focus': '重点难点突破'},
-                {'name': '冲刺阶段', 'days': days_left - 2 * (days_left // 3), 'focus': '模拟练习与复习'}
-            ]
-        else:
-            phases = [
-                {'name': '学习阶段', 'days': days_left * 2 // 3, 'focus': '核心知识点学习'},
-                {'name': '复习阶段', 'days': days_left - days_left * 2 // 3, 'focus': '综合复习'}
-            ]
-
-        plan['phases'] = phases
-
-        # 生成每日计划
-        daily_plan = []
-        current_date = datetime.now()
-
-        for i in range(min(days_left, 7)):  # 只生成前7天的详细计划
-            date = current_date + timedelta(days=i)
-            daily_plan.append({
-                'date': date.strftime('%Y-%m-%d'),
-                'weekday': ['周一', '周二', '周三', '周四', '周五', '周六', '周日'][date.weekday()],
-                'tasks': [
-                    f'复习笔记 {daily_hours/2:.1f}小时',
-                    f'做题练习 {daily_hours/2:.1f}小时'
-                ]
-            })
-
-        plan['daily_schedule'] = daily_plan
-        return plan
-
     def decompose_task(self, task_title, description='', total_days=7, ai_config=None):
         """任务分解 - 增强版：支持自然语言智能拆解，含多课程编排"""
         from datetime import datetime, timedelta

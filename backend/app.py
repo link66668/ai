@@ -11,7 +11,7 @@ load_dotenv(os.path.join(os.path.dirname(__file__), '.env'))
 
 from config import Config
 from database import db
-from routes import auth_bp, course_bp, document_bp, chat_bp, task_bp, plan_bp, agent_bp, user_ai_config_bp
+from routes import auth_bp, course_bp, document_bp, chat_bp, task_bp, agent_bp, user_ai_config_bp
 
 def create_app():
     """创建Flask应用"""
@@ -41,7 +41,6 @@ def create_app():
     app.register_blueprint(document_bp)
     app.register_blueprint(chat_bp)
     app.register_blueprint(task_bp)
-    app.register_blueprint(plan_bp)
     app.register_blueprint(agent_bp)
     app.register_blueprint(user_ai_config_bp)
 

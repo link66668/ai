@@ -258,31 +258,6 @@ class ApiClient {
         return this.post(`/tasks/decompose/${id}`);
     }
 
-    // 学习计划相关
-    getPlans() {
-        return this.get('/plans/');
-    }
-
-    createPlan(data) {
-        return this.post('/plans/', data);
-    }
-
-    getPlan(id) {
-        return this.get(`/plans/${id}`);
-    }
-
-    updatePlan(id, data) {
-        return this.put(`/plans/${id}`, data);
-    }
-
-    deletePlan(id) {
-        return this.delete(`/plans/${id}`);
-    }
-
-    generatePlan(data) {
-        return this.post('/plans/generate', data);
-    }
-
     // Agent相关
     agentChat(message, courseId) {
         return this.post('/agent/chat', { message, course_id: courseId });

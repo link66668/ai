@@ -121,23 +121,6 @@ class Database:
                 )
             ''')
 
-            # 学习计划表
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS study_plans (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    user_id INTEGER NOT NULL,
-                    course_id INTEGER NOT NULL,
-                    title VARCHAR(200) NOT NULL,
-                    goal TEXT,
-                    exam_date DATE DEFAULT NULL,
-                    daily_hours DECIMAL(3,1) DEFAULT 2.0,
-                    plan_data TEXT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-                    FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE
-                )
-            ''')
-
             # 用户AI配置表（每个用户独立的AI设置）
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS user_ai_config (
