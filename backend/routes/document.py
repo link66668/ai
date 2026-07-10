@@ -7,6 +7,8 @@ from werkzeug.utils import secure_filename
 from config import Config
 from models.document import Document
 from models.course import Course
+from services.vector_store import vector_store
+from services.bm25_manager import bm25_manager
 from .utils import token_required, success_response, error_response
 
 document_bp = Blueprint('document', __name__, url_prefix='/api/documents')
@@ -185,6 +187,24 @@ def delete_document(current_user, doc_id):
         course_dir = os.path.dirname(md_path)
         if os.path.isdir(course_dir) and not os.listdir(course_dir):
             os.rmdir(course_dir)
+
+    course_id = doc['course_id']
+
+    # 清除 ChromaDB 向量
+    try:
+        vector_store.delete_document(course_id, doc_id)
+    except Exception as e:
+        print(f"[Document] ChromaDB 清理失败: {e}")
+
+    # 重建该课程的 BM25 索引（排除被删文档的分块）
+    try:
+        remaining_chunks = Document.get_course_chunks_excluding(course_id, doc_id)
+        if remaining_chunks:
+            bm25_manager.build_index(course_id, remaining_chunks)
+        else:
+            bm25_manager.remove_course(course_id)
+    except Exception as e:
+        print(f"[Document] BM25 索引重建失败: {e}")
 
     Document.delete(doc_id)
     return success_response(msg='删除成功')

@@ -101,3 +101,11 @@ class Document:
                  WHERE document_id = ?
                  ORDER BY chunk_index"""
         return db.fetch_all(sql, (doc_id,))
+
+    @staticmethod
+    def get_course_chunks_excluding(course_id, exclude_doc_id):
+        """获取课程中除指定文档外的所有分块"""
+        sql = """SELECT * FROM document_chunks
+                 WHERE course_id = ? AND document_id != ?
+                 ORDER BY document_id, chunk_index"""
+        return db.fetch_all(sql, (course_id, exclude_doc_id))

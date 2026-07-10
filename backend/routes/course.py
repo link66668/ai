@@ -1,9 +1,12 @@
 from flask import Blueprint, request
 import os
 import re
+import shutil
 from config import Config
 from models.course import Course
 from models.document import Document
+from services.vector_store import vector_store
+from services.bm25_manager import bm25_manager
 from .utils import token_required, success_response, error_response
 
 course_bp = Blueprint('course', __name__, url_prefix='/api/courses')
@@ -140,13 +143,53 @@ def update_course(current_user, course_id):
 @course_bp.route('/<int:course_id>', methods=['DELETE'])
 @token_required
 def delete_course(current_user, course_id):
-    """删除课程"""
+    """删除课程（含知识库、向量索引、BM25 索引）"""
     course = Course.find_by_id(course_id)
     if not course:
         return error_response('课程不存在', 404)
 
     if course['user_id'] != current_user['id']:
         return error_response('无权访问', 403)
+
+    # 清理该课程下所有文档的物理文件
+    docs = Document.find_by_course(course_id)
+    for doc in docs:
+        # 删除上传文件
+        file_path = doc.get('file_path', '')
+        if file_path and os.path.exists(file_path):
+            try:
+                os.remove(file_path)
+            except Exception as e:
+                print(f"[Course] 删除文件失败 ({file_path}): {e}")
+
+        # 删除 MinerU 生成的 .md 文件
+        md_path = doc.get('md_path', '')
+        if md_path and os.path.exists(md_path):
+            try:
+                os.remove(md_path)
+            except Exception as e:
+                print(f"[Course] 删除知识库文件失败 ({md_path}): {e}")
+
+    # 清理课程知识库目录（MinerU 输出目录）
+    safe_name = re.sub(r'[\\/:*?"<>|]', '_', course['name']).strip() or 'unnamed'
+    kb_dir = os.path.join(Config.UPLOAD_FOLDER, safe_name)
+    if os.path.isdir(kb_dir):
+        try:
+            shutil.rmtree(kb_dir)
+        except Exception as e:
+            print(f"[Course] 删除知识库目录失败 ({kb_dir}): {e}")
+
+    # 清理 ChromaDB 向量集合
+    try:
+        vector_store.delete_course(course_id)
+    except Exception as e:
+        print(f"[Course] ChromaDB 清理失败: {e}")
+
+    # 清理 BM25 索引
+    try:
+        bm25_manager.remove_course(course_id)
+    except Exception as e:
+        print(f"[Course] BM25 索引清理失败: {e}")
 
     Course.delete(course_id)
     return success_response(msg='删除成功')
