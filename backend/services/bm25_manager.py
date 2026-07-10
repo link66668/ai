@@ -142,6 +142,7 @@ class BM25Manager:
                 }
             ]
         """
+        course_id = int(course_id)
         if course_id not in self._indexes:
             return []
 
@@ -177,6 +178,7 @@ class BM25Manager:
 
     def _save_index(self, course_id):
         """保存索引到文件"""
+        course_id = int(course_id)
         if course_id not in self._indexes:
             return
 
