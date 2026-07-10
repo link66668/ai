@@ -58,3 +58,4 @@ desktop.ini
 instance/
 *.out
 backend/.model_cache/
+chat-app/
