@@ -86,22 +86,8 @@ def upload_document(current_user):
         except Exception:
             pass
 
-    # md 文件直接放入知识库目录: uploads/{课程名}/{资料名}.md
-    if ext == 'md':
-        safe_course_name = re.sub(r'[\\/:*?"<>|]', '_', course['name']).strip() or 'unnamed'
-        kb_dir = os.path.join(Config.UPLOAD_FOLDER, safe_course_name)
-        os.makedirs(kb_dir, exist_ok=True)
-        # 生成知识库文件名：原始名（去扩展名）+ doc_id 占位（后面更新）
-        kb_name = original_name.rsplit('.', 1)[0] if '.' in original_name else original_name
-        kb_name = re.sub(r'[\\/:*?"<>|]', '_', kb_name).strip() or 'document'
-        md_dest = os.path.join(kb_dir, f'{kb_name}.md')
-        # 处理重名
-        if os.path.exists(md_dest):
-            md_dest = os.path.join(kb_dir, f'{kb_name}_{uuid.uuid4().hex[:6]}.md')
-        shutil.copy2(file_path, md_dest)
-        md_path = md_dest
-
-    # 保存记录
+    # 保存记录（.md 文件也在管线中统一处理，不在上传时预拷贝到知识库目录，
+    # 避免管线再次生成时造成重复文件）
     doc_id = Document.create(
         course_id=course_id,
         user_id=current_user['id'],

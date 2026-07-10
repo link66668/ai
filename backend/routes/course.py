@@ -184,20 +184,26 @@ def get_knowledge_base(current_user, course_id):
     kb_files = []
     if os.path.isdir(kb_dir):
         for fname in sorted(os.listdir(kb_dir)):
-            if fname.endswith('.md'):
-                fpath = os.path.join(kb_dir, fname)
-                stat = os.stat(fpath)
-                # 查找关联的文档记录（通过 md_path 匹配）
-                doc_info = _find_doc_by_md_path(course_id, fpath)
-                kb_files.append({
-                    'filename': fname,
-                    'display_name': fname.rsplit('.', 1)[0],
-                    'size': stat.st_size,
-                    'updated_at': stat.st_mtime,
-                    'doc_id': doc_info.get('doc_id') if doc_info else None,
-                    'original_name': doc_info.get('original_name') if doc_info else fname,
-                    'chunk_count': doc_info.get('chunk_count', 0) if doc_info else 0,
-                })
+            if not fname.endswith('.md'):
+                continue
+            fpath = os.path.join(kb_dir, fname)
+            # 查找关联的文档记录（通过 md_path 匹配）
+            doc_info = _find_doc_by_md_path(course_id, fpath)
+
+            # 跳过无关联的孤立 .md 文件（上传时预拷贝的旧文件，管线已重新生成并关联了新路径）
+            if not doc_info:
+                continue
+
+            stat = os.stat(fpath)
+            kb_files.append({
+                'filename': fname,
+                'display_name': fname.rsplit('.', 1)[0],
+                'size': stat.st_size,
+                'updated_at': stat.st_mtime,
+                'doc_id': doc_info['doc_id'],
+                'original_name': doc_info['original_name'],
+                'chunk_count': doc_info.get('chunk_count', 0),
+            })
 
     return success_response({
         'course_name': course['name'],
