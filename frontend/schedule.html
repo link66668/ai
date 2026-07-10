@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>课表 - 课程学习助手</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="page-wrapper">
+        <!-- 侧边栏 -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <h2>📚 学习助手</h2>
+            </div>
+            <nav class="sidebar-nav">
+                <a href="/dashboard.html" class="nav-item">
+                    <span class="icon">🏠</span> 仪表盘
+                </a>
+                <a href="/schedule.html" class="nav-item active">
+                    <span class="icon">📅</span> 课表
+                </a>
+                <a href="/courses.html" class="nav-item">
+                    <span class="icon">📖</span> 知识库
+                </a>
+                <a href="/chat.html" class="nav-item">
+                    <span class="icon">💬</span> Agent对话
+                </a>
+                <a href="/tasks.html" class="nav-item">
+                    <span class="icon">✅</span> 任务管理
+                </a>
+                <a href="/ai_settings.html" class="nav-item">
+                    <span class="icon">🤖</span> AI 配置
+                </a>
+                <a href="/profile.html" class="nav-item">
+                    <span class="icon">👤</span> 个人中心
+                </a>
+            </nav>
+            <div class="sidebar-footer">
+                <button class="btn btn-outline btn-block" onclick="logout()">退出登录</button>
+            </div>
+        </aside>
+
+        <!-- 主内容 -->
+        <main class="main-content">
+            <div class="topbar">
+                <h1>📅 课表</h1>
+                <div class="topbar-actions">
+                    <button class="btn btn-outline" onclick="showImportModal()">📥 导入课表</button>
+                    <button class="btn btn-primary" onclick="showCreateModal()">+ 新建课程</button>
+                </div>
+            </div>
+
+            <!-- 学期 + 周次筛选栏 -->
+            <div class="card mb-3" id="semesterBar" style="display:none;">
+                <div class="card-body" style="display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
+                    <div class="tabs" style="margin:0; border:none;" id="semesterTabs">
+                        <!-- 动态生成 -->
+                    </div>
+                    <div style="flex:1;"></div>
+                    <div style="display:flex; align-items:center; gap:6px;">
+                        <label style="font-size:13px; color:var(--gray-600); white-space:nowrap;">开学日期</label>
+                        <input type="date" id="semesterStartDate" class="form-control" style="width:140px; padding:4px 8px; font-size:13px;" onchange="onStartDateChange()">
+                    </div>
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <label style="font-size:13px; color:var(--gray-600); white-space:nowrap;">第</label>
+                        <select id="weekSelect" class="form-control" style="width:80px; padding:4px 8px; font-size:13px;" onchange="changeWeek()"></select>
+                        <label style="font-size:13px; color:var(--gray-600); white-space:nowrap;">周</label>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 课表网格 -->
+            <div class="card">
+                <div class="card-body">
+                    <div class="timetable-wrapper">
+                        <table class="timetable" id="timetableGrid">
+                            <!-- 动态生成 -->
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- 创建课程模态框 -->
+    <div class="modal-overlay" id="courseModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 id="modalTitle">新建课程</h3>
+                <button class="modal-close" onclick="closeModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="courseForm">
+                    <input type="hidden" id="courseId">
+                    <div class="form-group">
+                        <label class="form-label">课程名称 *</label>
+                        <input type="text" class="form-control" id="courseName" placeholder="如：高等数学" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">授课教师</label>
+                        <input type="text" class="form-control" id="courseTeacher" placeholder="如：张教授">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">开课学期</label>
+                        <input type="text" class="form-control" id="courseSemester" placeholder="如：2024春季">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">课程学分</label>
+                        <input type="number" class="form-control" id="courseCredit" step="0.5" min="0" max="10" placeholder="如：4.0">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">课程简介</label>
+                        <textarea class="form-control" id="courseDesc" placeholder="课程简介..." rows="3"></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal()">取消</button>
+                <button class="btn btn-primary" onclick="saveCourse()">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 导入课表模态框 -->
+    <div class="modal-overlay" id="importModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3>📥 导入课表</h3>
+                <button class="modal-close" onclick="closeImportModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="import-info" style="background:#f0f4ff; border-radius:8px; padding:12px 16px; margin-bottom:16px; font-size:14px; color:#4f46e5;">
+                    <strong>支持格式：</strong>教务系统导出的个人课表 CSV 文件<br>
+                    <strong>自动识别：</strong>课程名称、授课教师、学期、上课时间地点
+                </div>
+                <div id="importDropZone" class="import-drop-zone"
+                     style="border:2px dashed #d1d5db; border-radius:12px; padding:32px 20px; text-align:center; cursor:pointer; transition:all 0.2s;"
+                     onclick="document.getElementById('importFileInput').click()"
+                     ondragover="event.preventDefault(); this.style.borderColor='#4f46e5'; this.style.background='#f0f4ff';"
+                     ondragleave="this.style.borderColor='#d1d5db'; this.style.background='';"
+                     ondrop="event.preventDefault(); this.style.borderColor='#d1d5db'; this.style.background=''; handleImportFile(event.dataTransfer.files[0]);">
+                    <div id="importFileHint">
+                        <div style="font-size:36px; margin-bottom:8px;">📄</div>
+                        <div style="color:#6b7280; font-size:14px;">点击选择或拖拽 CSV 文件到此处</div>
+                    </div>
+                    <div id="importFileInfo" style="display:none;">
+                        <div style="font-size:36px; margin-bottom:8px;">✅</div>
+                        <div id="importFileName" style="color:#111827; font-weight:500;"></div>
+                        <div id="importFileSize" style="color:#6b7280; font-size:13px; margin-top:4px;"></div>
+                    </div>
+                    <input type="file" id="importFileInput" accept=".csv" style="display:none;" onchange="handleImportFile(this.files[0])">
+                </div>
+                <div id="importResult" style="display:none; margin-top:16px;">
+                    <div id="importResultSummary" style="padding:12px 16px; border-radius:8px; margin-bottom:12px;"></div>
+                    <div id="importResultCourses" style="max-height:200px; overflow-y:auto;"></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeImportModal()">取消</button>
+                <button class="btn btn-primary" id="importConfirmBtn" onclick="confirmImport()" disabled>确认导入</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/api.js"></script>
+    <script src="js/utils.js"></script>
+    <script>
+        if (!checkAuth()) throw new Error('未登录');
+
+        let allCourses = [];
+        let currentSemester = '';
+        let currentWeek = 1;
+
+        // 开学日期与周次计算
+        function initSemesterSettings() {
+            const saved = localStorage.getItem('semester_start_date');
+            if (saved) {
+                document.getElementById('semesterStartDate').value = saved;
+                currentWeek = calcWeekFromDate(saved);
+            }
+        }
+
+        function calcWeekFromDate(startDateStr) {
+            if (!startDateStr) return 1;
+            const start = new Date(startDateStr + 'T00:00:00');
+            const now = new Date();
+            const diffMs = now - start;
+            const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+            const week = Math.floor(diffDays / 7) + 1;
+            return Math.max(1, Math.min(20, week));
+        }
+
+        function onStartDateChange() {
+            const dateVal = document.getElementById('semesterStartDate').value;
+            localStorage.setItem('semester_start_date', dateVal);
+            if (dateVal) {
+                currentWeek = calcWeekFromDate(dateVal);
+                const select = document.getElementById('weekSelect');
+                if (select) select.value = currentWeek;
+            }
+            applyFilters();
+        }
+
+        // 加载课程
+        async function loadCourses() {
+            try {
+                const result = await api.getCourses('all');
+                allCourses = result.data || [];
+                updateSemesterBar();
+                applyFilters();
+            } catch (error) {
+                showToast('加载课程失败', 'error');
+            }
+        }
+
+        // 学期筛选栏
+        function updateSemesterBar() {
+            const semesters = [...new Set(allCourses.map(c => c.semester).filter(Boolean))].sort().reverse();
+            const bar = document.getElementById('semesterBar');
+            const tabs = document.getElementById('semesterTabs');
+
+            if (semesters.length === 0) {
+                bar.style.display = 'none';
+                return;
+            }
+
+            bar.style.display = '';
+            if (!currentSemester || !semesters.includes(currentSemester)) {
+                currentSemester = semesters[0];
+            }
+
+            let html = '';
+            semesters.forEach(s => {
+                html += `<div class="tab-item ${currentSemester === s ? 'active' : ''}" data-semester="${s}">${s}</div>`;
+            });
+            tabs.innerHTML = html;
+
+            tabs.querySelectorAll('.tab-item').forEach(tab => {
+                tab.addEventListener('click', () => {
+                    tabs.querySelectorAll('.tab-item').forEach(t => t.classList.remove('active'));
+                    tab.classList.add('active');
+                    currentSemester = tab.dataset.semester;
+                    applyFilters();
+                });
+            });
+        }
+
+        function applyFilters() {
+            let filtered = [...allCourses];
+            if (currentSemester) {
+                filtered = filtered.filter(c => c.semester === currentSemester);
+            }
+            renderTimetable(filtered);
+        }
+
+        // 周次选择
+        function initWeekSelector() {
+            const select = document.getElementById('weekSelect');
+            if (select.options.length > 0) {
+                select.value = currentWeek;
+                return;
+            }
+            for (let w = 1; w <= 20; w++) {
+                const opt = document.createElement('option');
+                opt.value = w;
+                opt.textContent = w;
+                if (w === currentWeek) opt.selected = true;
+                select.appendChild(opt);
+            }
+        }
+
+        function changeWeek() {
+            currentWeek = parseInt(document.getElementById('weekSelect').value) || 1;
+            applyFilters();
+        }
+
+        // === 课表渲染 ===
+
+        function parseSchedule(description) {
+            if (!description) return [];
+            const entries = [];
+            const dayMap = {'星期一':0,'星期二':1,'星期三':2,'星期四':3,'星期五':4,'星期六':5,'星期日':6};
+            const regex = /(星期[一二三四五六日])\s*\[(\d+(?:-\d+)*)\]节(?:\((\d{1,2}:\d{2}-\d{1,2}:\d{2})\))?\s*\|\s*(.+?)\s*\|\s*(.+)/g;
+            let match;
+            while ((match = regex.exec(description)) !== null) {
+                const day = dayMap[match[1]];
+                if (day === undefined) continue;
+                const periodStr = match[2];
+                const timeRange = match[3] || '';
+                const location = match[4].trim();
+                const weeks = match[5].trim();
+                const periods = periodStr.split('-').map(Number).filter(n => !isNaN(n));
+                entries.push({ day, periods, timeRange, location, weeks });
+            }
+            return entries;
+        }
+
+        function parseWeeks(weeksStr) {
+            const weeks = new Set();
+            const clean = weeksStr.replace(/\[周\]/g, '').trim();
+            const parts = clean.split(',');
+            parts.forEach(part => {
+                part = part.trim();
+                if (part.includes('-')) {
+                    const [start, end] = part.split('-').map(Number);
+                    if (!isNaN(start) && !isNaN(end)) {
+                        for (let w = start; w <= end; w++) weeks.add(w);
+                    }
+                } else {
+                    const n = Number(part);
+                    if (!isNaN(n)) weeks.add(n);
+                }
+            });
+            return [...weeks];
+        }
+
+        function renderTimetable(courses) {
+            const DAYS = ['星期一','星期二','星期三','星期四','星期五','星期六','星期日'];
+
+            const DEFAULT_PERIOD_TIMES = {
+                1: '08:00-08:45', 2: '08:50-09:35', 3: '09:50-10:35',
+                4: '10:40-11:25', 5: '11:30-12:15', 6: '13:00-13:45',
+                7: '13:50-14:35', 8: '14:45-15:30', 9: '15:40-16:25',
+                10: '16:35-17:20', 11: '17:25-18:10', 12: '18:30-19:15',
+                13: '19:20-20:05', 14: '20:10-20:55'
+            };
+
+            let periodTimeMap = {};
+            try {
+                const stored = localStorage.getItem('period_time_map');
+                if (stored) {
+                    const parsed = JSON.parse(stored);
+                    Object.keys(parsed).forEach(p => {
+                        const times = parsed[p].split('-');
+                        if (times.length === 2) {
+                            periodTimeMap[parseInt(p)] = { start: times[0], end: times[1] };
+                        }
+                    });
+                }
+            } catch (e) { console.warn(e); }
+
+            for (let p = 1; p <= 14; p++) {
+                if (!periodTimeMap[p] && DEFAULT_PERIOD_TIMES[p]) {
+                    const times = DEFAULT_PERIOD_TIMES[p].split('-');
+                    periodTimeMap[p] = { start: times[0], end: times[1] };
+                }
+            }
+
+            let maxPeriod = Math.max(...Object.keys(periodTimeMap).map(Number), 12);
+            const grid = {};
+            const colorMap = {};
+            let colorIdx = 0;
+
+            courses.forEach(course => {
+                const schedules = parseSchedule(course.description);
+                if (!schedules.length) return;
+                if (!(course.name in colorMap)) {
+                    colorMap[course.name] = colorIdx % 12;
+                    colorIdx++;
+                }
+                const ci = colorMap[course.name];
+
+                schedules.forEach(entry => {
+                    const activeWeeks = parseWeeks(entry.weeks);
+                    if (!activeWeeks.includes(currentWeek)) return;
+                    entry.periods.forEach(p => {
+                        if (p > maxPeriod) maxPeriod = p;
+                        if (!grid[p]) {
+                            grid[p] = {};
+                            for (let d = 0; d < 7; d++) grid[p][d] = [];
+                        }
+                        grid[p][entry.day].push({
+                            course, entry, colorIdx: ci,
+                            isStart: p === Math.min(...entry.periods),
+                            span: entry.periods.length
+                        });
+                    });
+                });
+            });
+
+            if (!courses.length || maxPeriod === 0) {
+                document.getElementById('timetableGrid').innerHTML = `
+                    <thead><tr><th>节次</th>${DAYS.map(d=>`<th>${d}</th>`).join('')}</tr></thead>
+                    <tbody><tr><td colspan="8" style="padding:60px; text-align:center; color:var(--gray-400);">
+                        <div style="font-size:48px; margin-bottom:12px;">📅</div>
+                        <div>第 ${currentWeek} 周暂无课程</div>
+                        <div style="font-size:13px; margin-top:4px;">尝试切换到其他周次，或导入课表 CSV</div>
+                    </td></tr></tbody>`;
+                return;
+            }
+
+            for (let p = 1; p <= maxPeriod; p++) {
+                if (!grid[p]) { grid[p] = {}; for (let d = 0; d < 7; d++) grid[p][d] = []; }
+            }
+
+            let html = '<thead><tr><th>节次</th>';
+            DAYS.forEach(d => html += `<th>${d}</th>`);
+            html += '</tr></thead><tbody>';
+
+            for (let p = 1; p <= maxPeriod; p++) {
+                html += '<tr>';
+                const timeInfo = periodTimeMap[p];
+                let periodHtml = `<span class="period-num">${p}</span>`;
+                if (timeInfo) periodHtml += `<span class="period-time">${timeInfo.start}-${timeInfo.end}</span>`;
+                html += `<td class="period-cell">${periodHtml}</td>`;
+
+                for (let d = 0; d < 7; d++) {
+                    const cells = grid[p][d];
+                    if (!cells.length) { html += '<td class="empty-cell"></td>'; continue; }
+
+                    const inner = cells.map(c => {
+                        if (c.isStart) {
+                            return `<div class="course-in-cell tt-color-${c.colorIdx}"
+                                        onclick="enterCourse(${c.course.id})"
+                                        title="${c.course.name}\n${c.entry.location}\n${c.entry.weeks}\n教师: ${c.course.teacher || '未设置'}">
+                                <span class="tt-name">${c.course.name}</span>
+                                <span class="tt-location">${c.entry.location}</span>
+                                ${c.span > 1 ? `<span class="tt-weeks">${c.entry.weeks}</span>` : ''}
+                            </div>`;
+                        } else {
+                            return `<div class="course-in-cell tt-color-${c.colorIdx}" style="opacity:0.7;"
+                                        onclick="enterCourse(${c.course.id})"
+                                        title="${c.course.name}（续）\n${c.entry.location}">
+                                <span class="tt-name" style="font-size:11px;">${c.course.name}</span>
+                            </div>`;
+                        }
+                    }).join('');
+                    html += `<td class="course-cell">${inner}</td>`;
+                }
+                html += '</tr>';
+            }
+            html += '</tbody>';
+            document.getElementById('timetableGrid').innerHTML = html;
+        }
+
+        function enterCourse(id) {
+            window.location.href = `/course_detail.html?id=${id}`;
+        }
+
+        // === 课程 CRUD ===
+
+        function showCreateModal() {
+            document.getElementById('modalTitle').textContent = '新建课程';
+            document.getElementById('courseForm').reset();
+            document.getElementById('courseId').value = '';
+            document.getElementById('courseModal').classList.add('active');
+        }
+
+        function closeModal() {
+            document.getElementById('courseModal').classList.remove('active');
+        }
+
+        function editCourse(id) {
+            const course = allCourses.find(c => c.id === id);
+            if (!course) return;
+            document.getElementById('modalTitle').textContent = '编辑课程';
+            document.getElementById('courseId').value = course.id;
+            document.getElementById('courseName').value = course.name;
+            document.getElementById('courseTeacher').value = course.teacher || '';
+            document.getElementById('courseSemester').value = course.semester || '';
+            document.getElementById('courseCredit').value = course.credit || '';
+            document.getElementById('courseDesc').value = course.description || '';
+            document.getElementById('courseModal').classList.add('active');
+        }
+
+        async function saveCourse() {
+            const id = document.getElementById('courseId').value;
+            const data = {
+                name: document.getElementById('courseName').value.trim(),
+                teacher: document.getElementById('courseTeacher').value.trim(),
+                semester: document.getElementById('courseSemester').value.trim(),
+                credit: parseFloat(document.getElementById('courseCredit').value) || 0,
+                description: document.getElementById('courseDesc').value.trim()
+            };
+            if (!data.name) { showToast('请填写课程名称', 'warning'); return; }
+            try {
+                if (id) {
+                    await api.updateCourse(id, data);
+                    showToast('更新成功', 'success');
+                } else {
+                    await api.createCourse(data);
+                    showToast('创建成功', 'success');
+                }
+                closeModal();
+                loadCourses();
+            } catch (error) {
+                showToast(error.message || '操作失败', 'error');
+            }
+        }
+
+        async function deleteCourse(id) {
+            if (!await confirmDialog('确定要删除该课程吗？此操作不可恢复！')) return;
+            try {
+                await api.deleteCourse(id);
+                showToast('删除成功', 'success');
+                loadCourses();
+            } catch (error) {
+                showToast('操作失败', 'error');
+            }
+        }
+
+        async function archiveCourse(id) {
+            if (!await confirmDialog('确定要归档该课程吗？')) return;
+            try {
+                await api.archiveCourse(id);
+                showToast('归档成功', 'success');
+                loadCourses();
+            } catch (error) {
+                showToast('操作失败', 'error');
+            }
+        }
+
+        // === CSV 导入 ===
+
+        let importFile = null;
+
+        function showImportModal() {
+            importFile = null;
+            document.getElementById('importFileInput').value = '';
+            document.getElementById('importFileHint').style.display = '';
+            document.getElementById('importFileInfo').style.display = 'none';
+            document.getElementById('importResult').style.display = 'none';
+            document.getElementById('importConfirmBtn').disabled = true;
+            document.getElementById('importConfirmBtn').textContent = '确认导入';
+            document.getElementById('importModal').classList.add('active');
+        }
+
+        function closeImportModal() {
+            document.getElementById('importModal').classList.remove('active');
+        }
+
+        function handleImportFile(file) {
+            if (!file) return;
+            if (!file.name.toLowerCase().endsWith('.csv')) {
+                showToast('请选择 CSV 格式文件', 'warning');
+                return;
+            }
+            importFile = file;
+            document.getElementById('importFileHint').style.display = 'none';
+            document.getElementById('importFileInfo').style.display = '';
+            document.getElementById('importFileName').textContent = file.name;
+            document.getElementById('importFileSize').textContent = formatFileSize(file.size);
+            document.getElementById('importResult').style.display = 'none';
+            document.getElementById('importConfirmBtn').disabled = false;
+        }
+
+        async function confirmImport() {
+            if (!importFile) return;
+            const btn = document.getElementById('importConfirmBtn');
+            btn.disabled = true;
+            btn.textContent = '导入中...';
+
+            const formData = new FormData();
+            formData.append('file', importFile);
+
+            try {
+                const result = await api.importCoursesCSV(formData);
+                if (result.code !== 200) {
+                    showToast(result.msg || '导入失败', 'error');
+                    btn.disabled = false;
+                    btn.textContent = '确认导入';
+                    return;
+                }
+
+                const data = result.data;
+                const resultDiv = document.getElementById('importResult');
+                const summaryDiv = document.getElementById('importResultSummary');
+                const coursesDiv = document.getElementById('importResultCourses');
+                resultDiv.style.display = '';
+
+                let summaryHtml = `<strong>${result.msg}</strong><br>`;
+                summaryHtml += `<span style="font-size:13px;">`;
+                summaryHtml += `共解析 ${data.total} 门 · 成功 ${data.success} 门`;
+                if (data.skipped > 0) summaryHtml += ` · 跳过 ${data.skipped} 门（已存在）`;
+                if (data.semester) summaryHtml += ` · 学期：${data.semester}`;
+                summaryHtml += `</span>`;
+                summaryDiv.style.background = data.success > 0 ? '#ecfdf5' : '#fef2f2';
+                summaryDiv.style.color = data.success > 0 ? '#065f46' : '#991b1b';
+                summaryDiv.innerHTML = summaryHtml;
+
+                if (data.courses && data.courses.length > 0) {
+                    coursesDiv.innerHTML = data.courses.map(c => `
+                        <div style="padding:6px 0; border-bottom:1px solid #f3f4f6; font-size:13px; display:flex; justify-content:space-between;">
+                            <span><strong>${c.name}</strong></span>
+                            <span style="color:#6b7280;">${c.teacher || ''} ${c.semester ? '· ' + c.semester : ''}</span>
+                        </div>
+                    `).join('');
+                }
+
+                if (data.errors && data.errors.length > 0) {
+                    coursesDiv.innerHTML += data.errors.map(e => `
+                        <div style="padding:6px 0; font-size:13px; color:#ef4444;">⚠️ ${e}</div>
+                    `).join('');
+                }
+
+                btn.textContent = '导入完成';
+                showToast(result.msg, 'success');
+                if (data.period_time_map) {
+                    localStorage.setItem('period_time_map', JSON.stringify(data.period_time_map));
+                }
+                loadCourses();
+            } catch (error) {
+                showToast(error.message || '导入失败', 'error');
+                btn.disabled = false;
+                btn.textContent = '确认导入';
+            }
+        }
+
+        // 初始化
+        initSemesterSettings();
+        initWeekSelector();
+        loadCourses();
+    </script>
+</body>
+</html>
