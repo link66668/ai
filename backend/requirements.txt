@@ -36,7 +36,7 @@ openai>=1.12.0             # DeepSeek API + MaaS 嵌入/视觉（OpenAI兼容）
 
 # 向量与检索
 # chromadb>=0.4.24          # 向量数据库 — Python 3.13 需要 chroma-hnswlib 编译环境
-rank-bm25>=0.2.2           # BM25检索
+# SQLite FTS5 用于全文检索（Python 内置，无需额外安装）
 
 # 安全
 cryptography>=42.0.0       # 临时文件加密

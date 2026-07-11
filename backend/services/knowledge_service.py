@@ -20,15 +20,16 @@ logger = logging.getLogger(__name__)
 class KnowledgeService:
     """知识库服务 — 搜索 + 格式化 + 引用构建"""
 
-    def search(self, course_id, query, ai_config=None, top_k=8):
+    def search(self, course_id, query, ai_config=None, top_k=8, max_per_document=3):
         """
-        知识库检索 — 返回标准化结果
+        知识库检索 — 返回跨文档分布的标准化结果
 
         Args:
             course_id: 课程 ID
             query: 用户问题
             ai_config: AI 配置（含嵌入 API 设置）
             top_k: 返回结果数
+            max_per_document: 每篇文档最多返回的块数（保证结果跨文档分布）
 
         Returns:
             KnowledgeResult[] — 每个元素:
@@ -41,8 +42,9 @@ class KnowledgeService:
 
         try:
             retrieval = RetrievalService()
+            # 多取一些原始结果，给跨文档筛选留空间
             raw_results = retrieval.hybrid_search(
-                course_id, query, top_k=top_k, ai_config=ai_config,
+                course_id, query, top_k=top_k * 3, ai_config=ai_config,
             )
         except Exception as e:
             logger.warning(f"[KnowledgeService] 检索失败: {e}")
@@ -54,11 +56,10 @@ class KnowledgeService:
         # 加载文档名映射（一次查询，供所有结果使用）
         doc_names = self._load_doc_names(course_id)
 
-        # 标准化结果
-        results = []
-        for i, r in enumerate(raw_results):
+        # 标准化 + 跨文档去重
+        standardized = []
+        for r in raw_results:
             doc_id = r.get('document_id') or ''
-            # 兼容两种字段位置：root 或 metadata 内
             if not doc_id and 'metadata' in r:
                 doc_id = r['metadata'].get('document_id', '')
 
@@ -73,18 +74,75 @@ class KnowledgeService:
                 except (ValueError, TypeError):
                     doc_name = '未知文档'
 
-            results.append({
-                'num': i + 1,
+            standardized.append({
                 'content': r.get('content', ''),
                 'doc_name': doc_name,
                 'heading_path': heading,
                 'score': round(float(r.get('score', 0)), 4),
                 'document_id': str(doc_id),
+            })
+
+        # 跨文档分布：每篇文档最多取 max_per_document 条
+        # 按分数排序后，逐文档填充，保证多样性
+        standardized.sort(key=lambda x: x['score'], reverse=True)
+        doc_count = {}  # document_id -> count
+        diverse_results = []
+
+        for item in standardized:
+            did = item['document_id']
+            current = doc_count.get(did, 0)
+            if current < max_per_document:
+                diverse_results.append(item)
+                doc_count[did] = current + 1
+            if len(diverse_results) >= top_k:
+                break
+
+        # 如果跨文档后数量不够，补填（通常是 max_per_document 限制太严）
+        if len(diverse_results) < top_k:
+            for item in standardized:
+                if item not in diverse_results:
+                    diverse_results.append(item)
+                    if len(diverse_results) >= top_k:
+                        break
+
+        # 编号
+        results = []
+        for i, r in enumerate(diverse_results):
+            results.append({
+                'num': i + 1,
+                'content': r['content'],
+                'doc_name': r['doc_name'],
+                'heading_path': r['heading_path'],
+                'score': r['score'],
+                'document_id': r['document_id'],
                 'source': 'course_kb',
             })
 
-        logger.info(f"[KnowledgeService] 检索 {len(results)} 条结果 for course={course_id}")
+        docs_covered = len(set(r['document_id'] for r in results if r['document_id']))
+        logger.info(
+            f"[KnowledgeService] 检索 {len(results)} 条结果, "
+            f"覆盖 {docs_covered} 篇文档 for course={course_id}"
+        )
         return results
+
+    def get_available_docs(self, course_id):
+        """获取课程中所有可供检索的文档列表"""
+        try:
+            from database import db
+            rows = db.fetch_all(
+                "SELECT id, original_name, file_type, chunk_count "
+                "FROM documents WHERE course_id = ? AND processing_status = 'completed' "
+                "ORDER BY original_name",
+                (course_id,)
+            )
+            return [
+                {'id': r['id'], 'name': r['original_name'],
+                 'type': r.get('file_type', ''), 'chunks': r.get('chunk_count', 0)}
+                for r in rows
+            ] if rows else []
+        except Exception as e:
+            logger.warning(f"[KnowledgeService] 获取文档列表失败: {e}")
+            return []
 
     def format_context(self, results, temp_text=''):
         """

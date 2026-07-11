@@ -34,13 +34,16 @@ class ChatEngine:
         'type': 'function',
         'function': {
             'name': 'kb_search',
-            'description': '搜索课程知识库，获取与问题相关的参考资料。如果你需要查阅课程资料来回答问题，请调用此工具。',
+            'description': '搜索课程知识库，获取与问题相关的参考资料。'
+                           '你可以用不同关键词多次调用此工具，'
+                           '从多篇文档中找到全面信息。',
             'parameters': {
                 'type': 'object',
                 'properties': {
                     'query': {
                         'type': 'string',
-                        'description': '搜索关键词，建议用中文原文搜索',
+                        'description': '搜索关键词，建议用中文原文搜索。'
+                                       '比如想找不同章节的内容，可以分别搜索',
                     },
                 },
                 'required': ['query'],
@@ -84,16 +87,22 @@ class ChatEngine:
         # 引用列表容器 — 工具执行时填充，路由层在流结束后读取
         captured_citations = []
 
+        # 可用文档列表（只需查询一次）
+        available_docs = knowledge_service.get_available_docs(course_id) if course_id else []
+
         def tool_executor(func_name, func_args):
             """工具执行器 — 执行知识库搜索并填充 captured_citations"""
             if func_name == 'kb_search':
                 query = func_args.get('query', message)
+                # max_per_document=3 确保结果来自多篇文档
                 results = knowledge_service.search(
-                    course_id, query, ai_config=ai_config, top_k=8,
+                    course_id, query, ai_config=ai_config,
+                    top_k=8, max_per_document=3,
                 )
                 cites = knowledge_service.format_citations(results)
-                captured_citations[:] = cites  # 替换内容（不是重新赋值）
-                return {
+                captured_citations[:] = cites
+
+                response = {
                     'results': [
                         {
                             'num': r['num'],
@@ -106,6 +115,14 @@ class ChatEngine:
                     ],
                     'citations': cites,
                 }
+
+                # 告诉 LLM 知识库有哪些文档可用，方便它决定是否继续搜索
+                if available_docs:
+                    response['available_docs'] = [
+                        d['name'] for d in available_docs
+                    ]
+
+                return response
             return {'error': f'未知工具: {func_name}'}
 
         gen = streaming_service.stream_with_tools(
@@ -166,6 +183,8 @@ class ChatEngine:
     def _build_system_prompt(self, has_kb=False, has_temp_file=False,
                               has_images=False, course_id=None):
         """构建系统提示"""
+        from services.knowledge_service import knowledge_service
+
         prompt = (
             '你是课程学习助手AI，用中文回答。回答简洁准确。\n'
             '请用与用户相同的语言回答。\n'
@@ -174,7 +193,23 @@ class ChatEngine:
         if has_kb:
             prompt += (
                 '你可以调用 kb_search 工具来搜索课程知识库获取参考资料。\n'
-                '当你需要使用知识库时，请调用此工具。\n'
+                '当你需要使用知识库时，请调用此工具。你可以多次调用 kb_search '
+                '（使用不同的搜索词）来从多篇文档中找到相关信息。\n'
+            )
+
+            # 告知 LLM 知识库中有哪些文档可用
+            available_docs = knowledge_service.get_available_docs(course_id)
+            if available_docs:
+                doc_list = '\n'.join(
+                    f'  - {d["name"]}' for d in available_docs
+                )
+                prompt += (
+                    '当前知识库包含以下文档：\n'
+                    f'{doc_list}\n'
+                    '回答问题时，尽量引用多篇文档的信息，不要只用单一来源。\n'
+                )
+
+            prompt += (
                 '【引用规则】\n'
                 '1. 引用知识库内容时，必须在句子末尾标注编号，格式如 [1]。\n'
                 '2. 如果一句话来自多个来源，请全部标出，格式如 [1][2]。\n'
