@@ -8,7 +8,6 @@
 - 上下文窗口管理
 """
 import logging
-from config import Config
 
 logger = logging.getLogger(__name__)
 
@@ -19,24 +18,81 @@ class RetrievalService:
     RRF_K = 60  # RRF 融合参数
 
     def __init__(self):
-        self._tokenizer = None
-
-    @property
-    def tokenizer(self):
-        if self._tokenizer is None:
-            import tiktoken
-            try:
-                self._tokenizer = tiktoken.get_encoding('cl100k_base')
-            except Exception:
-                self._tokenizer = tiktoken.get_encoding('o200k_base')
-        return self._tokenizer
+        from services.token_counter import token_counter as _tc
+        self._tc = _tc
 
     def count_tokens(self, text):
-        """计算 token 数量"""
+        """计算 token 数量（委托给共享计数器）"""
+        return self._tc.count(text)
+
+    # ==================== 重排序 ====================
+
+    def _rerank_if_configured(self, results, query, ai_config):
+        """
+        如果配置了 rerank 模型，对检索结果进行重排序
+
+        使用 Cohere 兼容的 Rerank API（如 Cohere、Jina、Mixedbread 等）。
+        通过直接 HTTP 调用，避免依赖 OpenAI 客户端的 rerank 接口。
+        """
+        if not results or not ai_config:
+            return results
+
+        rerank_url = (ai_config.get('rerank_api_url') or '').strip()
+        rerank_key = (ai_config.get('rerank_api_key') or '').strip()
+        rerank_model = (ai_config.get('rerank_model') or '').strip()
+
+        if not (rerank_url and rerank_key and rerank_model):
+            return results
+
+        import httpx
+
+        documents = [r.get('content', '') for r in results if r.get('content')]
+        if not documents:
+            return results
+
         try:
-            return len(self.tokenizer.encode(text))
-        except Exception:
-            return len(text) // 2
+            with httpx.Client(timeout=30.0) as client:
+                response = client.post(
+                    rerank_url.rstrip('/') + '/rerank',
+                    headers={
+                        'Authorization': f'Bearer {rerank_key}',
+                        'Content-Type': 'application/json',
+                    },
+                    json={
+                        'model': rerank_model,
+                        'query': query,
+                        'documents': documents,
+                        'top_n': len(documents),
+                    },
+                )
+                response.raise_for_status()
+                data = response.json()
+
+            # Cohere 兼容格式：{ results: [{ index: int, relevance_score: float }, ...] }
+            # Jina 兼容格式：{ results: [{ index: int, relevance_score: float }, ...] }
+            raw_results = data.get('results', [])
+            if not raw_results:
+                # 尝试 data.data 格式 (OpenAI-like)
+                raw_results = data.get('data', [])
+
+            reranked = []
+            for r in raw_results:
+                idx = r.get('index', 0)
+                if idx < len(results):
+                    item = dict(results[idx])
+                    item['score'] = round(r.get('relevance_score', r.get('score', 0)), 4)
+                    item['rerank_score'] = item['score']
+                    item['source'] = item.get('source', '') + '+rerank'
+                    reranked.append(item)
+
+            if reranked:
+                logger.info(f"[检索] 重排序完成: {len(reranked)} 条 (model={rerank_model})")
+                return reranked
+
+        except Exception as e:
+            logger.warning(f"[检索] 重排序失败（跳过）: {e}")
+
+        return results
 
     def hybrid_search(self, course_id, query, top_k=10, metadata_filter=None, ai_config=None):
         """
@@ -55,7 +111,7 @@ class RetrievalService:
         from services.bm25_manager import bm25_manager
 
         # BM25 关键词检索（始终可用）
-        bm25_results = bm25_manager.search(course_id, query, top_k=top_k)
+        bm25_results = bm25_manager.search(course_id, query, top_k=top_k * 2)
 
         # 向量检索（嵌入模型已配置时）
         vector_results = []
@@ -67,7 +123,7 @@ class RetrievalService:
                 query_embeddings = embedding_service.embed_texts([query], ai_config=ai_config)
                 if query_embeddings and query_embeddings[0]:
                     vector_results = vector_store.search(
-                        course_id, query_embeddings[0], top_k=top_k, metadata_filter=metadata_filter
+                        course_id, query_embeddings[0], top_k=top_k * 2, metadata_filter=metadata_filter
                     )
                     if vector_results:
                         logger.info(f"[检索] 向量检索返回 {len(vector_results)} 条, BM25 {len(bm25_results)} 条 → RRF 融合")
@@ -76,11 +132,16 @@ class RetrievalService:
 
         # 融合或单路返回
         if vector_results and bm25_results:
-            return self._rrf_fusion(vector_results, bm25_results, top_k)
+            results = self._rrf_fusion(vector_results, bm25_results, top_k)
         elif vector_results:
-            return vector_results[:top_k]
+            results = vector_results[:top_k]
         else:
-            return bm25_results
+            results = bm25_results
+
+        # 可选重排序（如果配置了 rerank 模型）
+        results = self._rerank_if_configured(results, query, ai_config)
+
+        return results[:top_k]
 
     def _has_embedding(self, ai_config):
         """检查是否配置了嵌入模型"""
@@ -96,227 +157,70 @@ class RetrievalService:
 
         公式: score(d) = sum(1 / (k + rank_i(d)) for each retriever i)
         k = 60 降低高排名项的权重差异
+
+        使用内容摘要作为融合 key，确保相同内容的向量和 BM25 结果真正融合。
         """
-        scores = {}
+        import hashlib
+
+        def content_key(text):
+            return hashlib.md5(text.encode('utf-8')).hexdigest()
+
+        scores = {}       # content_hash -> rrf_score
+        best_item = {}    # content_hash -> best item dict
 
         # 向量检索排名
         for rank, item in enumerate(vector_results):
-            key = item.get('chunk_id', item.get('content', str(rank)))
-            scores[key] = scores.get(key, 0) + 1.0 / (self.RRF_K + rank + 1)
-            if key not in [i.get('chunk_id', i.get('content', '')) for i in getattr(self, '_vec_items', [])]:
-                pass  # Will merge content below
+            content = item.get('content', '')
+            if not content:
+                continue
+            ck = content_key(content)
+            scores[ck] = scores.get(ck, 0) + 1.0 / (self.RRF_K + rank + 1)
+            meta = item.get('metadata', {})
+            if ck not in best_item:
+                best_item[ck] = {
+                    'content': content,
+                    'document_id': meta.get('document_id', ''),
+                    'heading_path': meta.get('heading_path', ''),
+                    'metadata': meta,
+                    'chunk_id': item.get('chunk_id', ''),
+                    'source': 'vector',
+                }
 
         # BM25 检索排名
         for rank, item in enumerate(bm25_results):
-            key = f"bm25_{item.get('chunk_index', rank)}"
-            scores[key] = scores.get(key, 0) + 1.0 / (self.RRF_K + rank + 1)
+            content = item.get('content', '')
+            if not content:
+                continue
+            ck = content_key(content)
+            scores[ck] = scores.get(ck, 0) + 1.0 / (self.RRF_K + rank + 1)
+            if ck not in best_item:
+                best_item[ck] = {
+                    'content': content,
+                    'document_id': str(item.get('document_id', '')),
+                    'heading_path': item.get('heading_path', ''),
+                    'metadata': {
+                        'chunk_index': item.get('chunk_index'),
+                        'document_id': str(item.get('document_id', '')),
+                        'heading_path': item.get('heading_path', ''),
+                    },
+                    'chunk_id': f"bm25_{item.get('chunk_index', 0)}",
+                    'source': 'bm25',
+                }
+            elif best_item[ck]['source'] == 'vector':
+                # 补充 BM25 特有的字段（如 document_id 可能更完整）
+                if not best_item[ck].get('document_id'):
+                    best_item[ck]['document_id'] = str(item.get('document_id', ''))
+                if not best_item[ck].get('heading_path'):
+                    best_item[ck]['heading_path'] = item.get('heading_path', '')
 
         # 构建融合结果
         fused_list = []
+        for ck, score in scores.items():
+            item = best_item.get(ck, {})
+            item['score'] = score
+            fused_list.append(item)
 
-        # 添加向量检索结果（带融合分数）
-        seen_contents = set()
-        for item in vector_results:
-            key = item.get('chunk_id', '')
-            content = item.get('content', '')
-            if content in seen_contents:
-                continue
-            seen_contents.add(content)
-            meta = item.get('metadata', {})
-            fused_list.append({
-                'content': content,
-                'score': scores.get(key, 0),
-                'source': 'vector',
-                'document_id': meta.get('document_id', ''),
-                'heading_path': meta.get('heading_path', ''),
-                'metadata': meta,
-                'chunk_id': key,
-            })
-
-        # 添加 BM25 结果（去重）
-        for item in bm25_results:
-            content = item.get('content', '')
-            if content in seen_contents:
-                continue
-            seen_contents.add(content)
-            key = f"bm25_{item.get('chunk_index', 0)}"
-            fused_list.append({
-                'content': content,
-                'score': scores.get(key, 0),
-                'source': 'bm25',
-                'document_id': str(item.get('document_id', '')),
-                'heading_path': item.get('heading_path', ''),
-                'metadata': {
-                    'chunk_index': item.get('chunk_index'),
-                    'document_id': str(item.get('document_id', '')),
-                    'heading_path': item.get('heading_path', ''),
-                },
-                'chunk_id': key,
-            })
-
-        # 按分数排序
+        # 按 RRF 分数排序
         fused_list.sort(key=lambda x: x['score'], reverse=True)
         return fused_list[:top_k]
 
-    def build_rag_context(self, course_id, query, temp_file_text='',
-                          conversation_history=None, top_k=8, ai_config=None):
-        """
-        构建完整的 RAG 上下文
-
-        Args:
-            course_id: 课程 ID（可选）
-            query: 用户查询
-            temp_file_text: 临时文件文本内容
-            conversation_history: 对话历史
-            top_k: 检索结果数
-
-        Returns:
-            dict: {
-                'messages': [...],       # LLM messages格式
-                'citations': [...],      # 引用列表
-                'has_temp_file': bool,   # 是否包含临时文件
-                'token_count': int,      # 上下文 token 总数
-            }
-        """
-        citations = []
-        context_parts = []
-        total_tokens = 0
-
-        # 1. 课程知识库检索
-        if course_id:
-            search_results = self.hybrid_search(course_id, query, top_k=top_k, ai_config=ai_config)
-
-            if search_results:
-                # 预加载文档名称映射（document_id → original_name）
-                doc_names = self._load_doc_names(course_id)
-
-                context_parts.append('【课程知识库】')
-                for i, result in enumerate(search_results):
-                    citation_num = i + 1
-                    content = result['content']
-                    doc_id = result.get('document_id') or result.get('metadata', {}).get('document_id', '')
-                    doc_name = doc_names.get(int(doc_id), '未知文档') if doc_id else '未知文档'
-                    heading = result.get('heading_path', '') or result.get('metadata', {}).get('heading_path', '')
-
-                    # 上下文中包含文件名，方便 LLM 引用
-                    source_label = f'来源: {doc_name}'
-                    if heading:
-                        source_label += f' > {heading}'
-                    context_parts.append(f'[{citation_num}] ({source_label})\n{content}')
-
-                    citations.append({
-                        'num': citation_num,
-                        'content': content[:200],
-                        'document_id': str(doc_id),
-                        'doc_name': doc_name,
-                        'heading_path': heading,
-                        'score': round(result['score'], 4),
-                        'source': 'course_kb',
-                    })
-                    total_tokens += self.count_tokens(content)
-
-        # 2. 临时文件上下文
-        has_temp_file = bool(temp_file_text)
-        if temp_file_text:
-            context_parts.insert(0, '【临时文件】（仅限本次对话有效）')
-            context_parts.insert(1, temp_file_text)
-            citations.append({
-                'num': 0,
-                'content': '(临时文件)',
-                'source': 'temp_file',
-                'note': '来自当前对话上传的临时文件，不保存到知识库',
-            })
-            total_tokens += self.count_tokens(temp_file_text)
-
-        # 3. 构建系统提示
-        system_prompt = self._build_system_prompt(
-            has_course_kb=bool(course_id and search_results),
-            has_temp_file=has_temp_file,
-        )
-
-        # 4. 构建消息列表
-        messages = [{'role': 'system', 'content': system_prompt}]
-
-        # 添加上下文
-        if context_parts:
-            context_text = '\n\n'.join(context_parts)
-            messages.append({
-                'role': 'system',
-                'content': f'以下是从课程知识库中检索到的参考资料，每条标注了来源文件名：\n\n{context_text}\n\n请根据以上资料回答用户问题。引用时务必标注编号和来源文件名，如 [1]《xxx.md》。引用临时文件时标注(临时文件)。'
-            })
-
-        # 5. 添加对话历史（在 token 限制内）
-        if conversation_history:
-            max_history_tokens = Config.MAX_CONTEXT_TOKENS - total_tokens - 1000  # 留 1000 给回答
-            history_messages = self._truncate_history(
-                conversation_history, max_history_tokens
-            )
-            messages.extend(history_messages)
-
-        # 6. 添加当前用户消息
-        messages.append({'role': 'user', 'content': query})
-
-        return {
-            'messages': messages,
-            'citations': citations,
-            'has_temp_file': has_temp_file,
-            'token_count': sum(self.count_tokens(m['content']) for m in messages),
-        }
-
-    def _build_system_prompt(self, has_course_kb=False, has_temp_file=False):
-        """构建系统提示"""
-        prompt = '你是课程学习助手AI，帮助学生学习课程内容。回答问题时：\n'
-        prompt += '1. 请用中文回答\n'
-        prompt += '2. 回答应准确、简洁、有组织\n'
-
-        if has_course_kb:
-            prompt += '3. 引用课程知识库内容时，必须标注编号和来源文件名，格式如 [1]《文件名》。例如："根据《第1章-绪论.md》中的内容[1]..."\n'
-        if has_temp_file:
-            prompt += '4. 临时文件中的图片内容已经过视觉识别提取为文字，你可以直接阅读和分析这些文字内容。引用临时文件内容时标注(临时文件)\n'
-
-        prompt += '5. 如果参考资料不足以回答问题，请诚实说明\n'
-        prompt += '6. 可以结合你的知识进行补充，但要明确区分资料来源和你的推断\n'
-
-        return prompt
-
-    def _load_doc_names(self, course_id):
-        """加载课程的文档 ID → 文件名映射"""
-        from database import db
-        docs = db.fetch_all(
-            "SELECT id, original_name FROM documents WHERE course_id = ?",
-            (course_id,)
-        )
-        return {d['id']: d['original_name'] for d in docs} if docs else {}
-
-    def _truncate_history(self, history, max_tokens):
-        """
-        截断对话历史以符合 token 限制
-
-        保留最近的对话，从后往前截取
-        """
-        if not history:
-            return []
-
-        truncated = []
-        token_count = 0
-
-        for msg in reversed(history):
-            msg_tokens = self.count_tokens(msg.get('content', ''))
-            if token_count + msg_tokens > max_tokens:
-                # 如果已经有一定历史，停止
-                if truncated:
-                    break
-                # 如果这是第一条，截断内容
-                content = msg.get('content', '')
-                # 粗略截断
-                cutoff = int(len(content) * max_tokens / msg_tokens) if msg_tokens > 0 else len(content)
-                truncated.insert(0, {
-                    'role': msg['role'],
-                    'content': content[:cutoff] + '...',
-                })
-                break
-
-            truncated.insert(0, msg)
-            token_count += msg_tokens
-
-        return truncated

@@ -182,6 +182,7 @@ def send_message_stream(current_user, conv_id):
         conversation_history=history_list,
         temp_file_session_id=temp_file_session_id,
         ai_config=ai_config,
+        conversation_id=conv_id,
     )
 
     # ---- Step 5: 流式传输 + DB 持久化 ----

@@ -17,27 +17,13 @@ class ChunkingService:
     def __init__(self, chunk_size=None, chunk_overlap=None):
         self.chunk_size = chunk_size or Config.CHUNK_SIZE       # 默认 512
         self.chunk_overlap = chunk_overlap or Config.CHUNK_OVERLAP  # 默认 128
-        self._tokenizer = None
-
-    @property
-    def tokenizer(self):
-        """懒加载 tiktoken tokenizer"""
-        if self._tokenizer is None:
-            import tiktoken
-            try:
-                self._tokenizer = tiktoken.get_encoding('cl100k_base')
-            except Exception:
-                # 降级到简单编码
-                self._tokenizer = tiktoken.get_encoding('o200k_base')
-        return self._tokenizer
+        # 使用共享 token 计数器，避免重复初始化 tiktoken
+        from services.token_counter import token_counter as _tc
+        self._tc = _tc
 
     def count_tokens(self, text):
-        """计算文本的 token 数量"""
-        try:
-            return len(self.tokenizer.encode(text))
-        except Exception:
-            # 降级：按字符数估算（中文约 1.5 字/token，英文约 4 字/token）
-            return len(text) // 2
+        """计算文本的 token 数量（委托给共享计数器）"""
+        return self._tc.count(text)
 
     def chunk_document(self, full_text, pages_texts=None, structure_data=None):
         """
@@ -334,19 +320,103 @@ class ChunkingService:
         return ''.join(tail)
 
     def _inject_structure(self, chunks, structure_data):
-        """注入文档结构信息（标题路径）"""
-        headings = structure_data.get('headings', []) if structure_data else []
+        """
+        注入文档结构信息（标题路径）— 基于位置映射，而非文本匹配
 
+        使用标题在全文中的字符偏移量来确定每个块所属的标题路径。
+        如果 structure_data 包含 heading_positions，则使用精确位置映射；
+        否则回退到文本匹配。
+        """
+        headings = structure_data.get('headings', []) if structure_data else []
         if not headings:
             return chunks
 
-        # 简单策略：根据块内容中的标题标记匹配
+        # === 优先使用位置映射 ===
+        heading_positions = structure_data.get('heading_positions', [])
+        if heading_positions:
+            # heading_positions: [(start_char, end_char, heading_text, level, path), ...]
+            # 为每个块计算其在全文中的大致位置范围，映射到对应标题
+            char_offset = 0
+            chunk_heading_map = []  # (chunk_index, heading_path)
+
+            # 先建立标题位置索引
+            heading_path_at_pos = []  # (start, end, path)
+            for hp in heading_positions:
+                if len(hp) >= 5:
+                    start, end, text, level, path = hp[:5]
+                    heading_path_at_pos.append((start, end, path))
+
+            # 如果没有精确位置信息，用累计字符偏移
+            if not heading_path_at_pos:
+                heading_path_at_pos = self._build_heading_position_map(
+                    chunks, headings
+                )
+
+            # 为每个块分配标题路径
+            for chunk in chunks:
+                chunk_start = char_offset
+                chunk_end = char_offset + len(chunk['content'])
+                char_offset = chunk_end + 1  # +1 for separator
+
+                # 查找覆盖此块范围的最后一个标题
+                assigned_path = ''
+                for hs, he, hp in heading_path_at_pos:
+                    # 标题起始位置在块结束之前（即标题在块之前或块内）
+                    if hs < chunk_end:
+                        assigned_path = hp
+                chunk['heading_path'] = assigned_path
+
+            return chunks
+
+        # === 回退：文本匹配（原逻辑，修复 false positive）===
+        # 使用精确匹配 + 排除短文本误匹配
         for chunk in chunks:
+            best_heading = ''
+            best_pos = -1
             for heading in headings:
                 heading_text = heading.get('text', '')
-                if heading_text and heading_text in chunk['content']:
-                    chunk['heading_path'] = heading.get('path', heading_text)
-                    chunk['chunk_type'] = 'heading'
-                    break
+                if not heading_text or len(heading_text) < 2:
+                    continue
+                pos = chunk['content'].find(heading_text)
+                # 取匹配到的最靠后的标题（嵌套标题中最深层级）
+                if pos != -1 and pos > best_pos:
+                    # 标题文本应在块的开头附近（前 1/3 区域）
+                    if pos < len(chunk['content']) * 0.33:
+                        best_pos = pos
+                        best_heading = heading.get('path', heading_text)
+            if best_heading:
+                chunk['heading_path'] = best_heading
 
         return chunks
+
+    def _build_heading_position_map(self, chunks, headings):
+        """
+        从标题文本在全文中的位置构建 heading position map
+
+        回退策略：通过文本匹配找到标题文本在块中的位置，
+        累计字符偏移来估算标题在原文中的位置。
+        """
+        from itertools import chain
+        full_text_parts = []
+        heading_map = []
+
+        for i, heading in enumerate(headings):
+            heading_text = heading.get('text', '')
+            if not heading_text:
+                continue
+            path = heading.get('path', heading_text)
+
+            # 在 chunks 中查找此标题文本
+            found = False
+            char_offset = 0
+            for chunk in chunks:
+                pos = chunk['content'].find(heading_text)
+                if pos != -1:
+                    start = char_offset + pos
+                    end = start + len(heading_text)
+                    heading_map.append((start, end, path))
+                    found = True
+                    break
+                char_offset += len(chunk['content']) + 1
+
+        return heading_map

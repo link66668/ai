@@ -47,6 +47,8 @@ Chat Engine — 对话引擎服务
 """
 import json
 import base64
+import time
+import threading
 import logging
 
 logger = logging.getLogger(__name__)
@@ -54,6 +56,10 @@ logger = logging.getLogger(__name__)
 
 class ChatEngine:
     """对话引擎 — 从用户输入到 SSE 流式响应的完整管线"""
+
+    # 工作线程局部状态：防止同一引擎实例上并发 stream()
+    _stream_lock = threading.Lock()
+    _stream_active = False
 
     # ==================== Step 1: 上下文解析 ====================
 
@@ -136,69 +142,101 @@ class ChatEngine:
 
     # ==================== Step 3: 流式调用 ====================
 
-    def stream(self, messages, citations=None, ai_config=None):
+    def stream(self, messages, citations=None, ai_config=None, conversation_id=None):
         """
         流式聊天 — SSE 事件生成器
 
         对应 chat-app 的 streamChat() (ai.ts)
         降级链: 多模态LLM → 纯文本LLM → Mock
+
+        Args:
+            messages: LLM 消息列表
+            citations: 引用列表（可选）
+            ai_config: 用户 AI 配置
+            conversation_id: 对话 ID（用于中断检测和并发保护）
         """
         from services.streaming_service import streaming_service
 
         has_images = self._messages_have_images(messages)
 
-        def generator():
-            error_occurred = False
-
-            for event in streaming_service.stream_chat(messages, ai_config=ai_config):
-                if event.startswith('data: '):
-                    try:
-                        data = json.loads(event[6:])
-                        if data.get('done') and data.get('error'):
-                            error_occurred = True
-                            break
-                    except json.JSONDecodeError:
-                        pass
-                yield event
-
-            if not error_occurred:
-                return
-
-            # ---- 降级链 ----
-            logger.warning("[ChatEngine] 流式调用检测到错误，进入降级链")
-
-            if has_images:
-                logger.info("[ChatEngine] 回退到纯文本模式")
-                text_messages = self._strip_images(messages)
-                try:
-                    response_text = streaming_service.blocking_chat(
-                        text_messages, ai_config=ai_config,
-                    )
-                    yield from streaming_service.pseudo_stream(response_text)
-                    return
-                except Exception as e2:
-                    logger.warning(f"[ChatEngine] 纯文本回退失败: {e2}")
-
-            logger.info("[ChatEngine] 回退到 Mock 模式")
+        # 并发保护：防止同一引擎实例上同时运行多个流
+        # 如果上一个流还在运行，等待它完成
+        acquired = self._stream_lock.acquire(blocking=False)
+        if not acquired:
+            logger.warning("[ChatEngine] 检测到并发流请求，拒绝新请求")
+            # 返回 Mock 流，避免阻塞 HTTP 线程
             yield from self._mock_stream(messages)
+            return
 
-        yield from self._inject_citations(generator(), citations)
+        try:
+            self._stream_active = True
+
+            def generator():
+                error_occurred = False
+
+                for event in streaming_service.stream_chat(
+                    messages, conversation_id=conversation_id, ai_config=ai_config
+                ):
+                    if event.startswith('data: '):
+                        try:
+                            data = json.loads(event[6:])
+                            if data.get('done') and data.get('error'):
+                                error_occurred = True
+                                break
+                        except json.JSONDecodeError:
+                            pass
+                    yield event
+
+                if not error_occurred:
+                    return
+
+                # ---- 降级链 ----
+                logger.warning("[ChatEngine] 流式调用检测到错误，进入降级链")
+
+                if has_images:
+                    logger.info("[ChatEngine] 回退到纯文本模式")
+                    text_messages = self._strip_images(messages)
+                    try:
+                        response_text = streaming_service.blocking_chat(
+                            text_messages, ai_config=ai_config,
+                        )
+                        yield from streaming_service.pseudo_stream(response_text)
+                        return
+                    except Exception as e2:
+                        logger.warning(f"[ChatEngine] 纯文本回退失败: {e2}")
+
+                logger.info("[ChatEngine] 回退到 Mock 模式")
+                yield from self._mock_stream(messages)
+
+            yield from self._inject_citations(generator(), citations)
+
+        finally:
+            self._stream_active = False
+            self._stream_lock.release()
 
     # ==================== 完整管线 ====================
 
     def process(self, message, course_id=None, conversation_history=None,
-                temp_file_session_id=None, ai_config=None):
+                temp_file_session_id=None, ai_config=None, conversation_id=None):
         """
         完整对话管线 — resolve → build → stream
 
         对应 chat-app useChat.send() 全流程
+
+        Args:
+            message: 用户消息文本
+            course_id: 知识库课程 ID（可选）
+            conversation_history: 对话历史列表
+            temp_file_session_id: 临时文件会话 ID（可选）
+            ai_config: 用户 AI 配置 dict（可选）
+            conversation_id: 对话 ID（用于中断检测和并发保护）
 
         Returns:
             (generator, citations)
         """
         ctx = self.resolve_context(message, course_id, temp_file_session_id, ai_config)
         messages = self.build_messages(message, ctx, conversation_history)
-        gen = self.stream(messages, ctx.citations, ai_config)
+        gen = self.stream(messages, ctx.citations, ai_config, conversation_id)
         return gen, ctx.citations
 
     # ==================== 内部: 上下文获取 ====================

@@ -2,16 +2,18 @@
 异步文档处理管线
 
 使用 ThreadPoolExecutor 后台处理文档：
-解析 → OCR → 版面分析 → 表格提取 → 结构抽取 → 分块 → 嵌入 → 索引
+解析 → OCR → 版面分析 → 表格提取 → 结构抽取 → 分块 → 嵌入（含内容去重） → 索引
 
 特性：
 - 上传后异步触发
 - 进度可查询（0.0 ~ 1.0）
 - 失败自动重试
 - 线程安全（每个工作线程独立的数据库连接）
+- 内容哈希去重（避免重复嵌入相同文本）
 """
 import os
 import re
+import hashlib
 import time
 import json
 import atexit
@@ -248,7 +250,7 @@ class AsyncPipeline:
                             f'结构提取完成, {len(structure["headings"])} 个标题, {len(all_tables)} 个表格',
                             int((time.time() - t0) * 1000))
 
-        # Stage 5: 分块
+        # Stage 5: 分块（含内容哈希）
         self._update_stage(doc_id, 'chunking', 0.7)
         t0 = time.time()
         chunking = ChunkingService()
@@ -256,30 +258,90 @@ class AsyncPipeline:
         for chunk in chunks:
             chunk['document_id'] = doc_id
             chunk['course_id'] = course_id
+            chunk['content_hash'] = hashlib.md5(
+                chunk['content'].encode('utf-8')
+            ).hexdigest()
         self._log_stage(doc_id, 'chunking', 'success',
                         f'分块完成, {len(chunks)} 个块',
                         int((time.time() - t0) * 1000))
 
-        # Stage 6: 嵌入（API 模式，失败自动降级到哈希向量）
+        # Stage 6: 嵌入（含内容哈希去重）
         self._update_stage(doc_id, 'embedding', 0.8)
         t0 = time.time()
-        chunk_texts = [c['content'] for c in chunks]
-        embeddings = embedding_service.embed_texts(chunk_texts, ai_config=ai_config)
-        msg = f'嵌入完成, {len(embeddings)} 个向量, {embedding_service.get_dimension()}维'
+
+        # 查询本课程现有的内容哈希，避免重复嵌入相同文本
+        existing_hashes = self._get_existing_content_hashes(course_id)
+        mem_embeddings = {}  # content_hash -> vector (供去重用)
+
+        # 分离需要嵌入的新块和可跳过的旧块
+        chunks_to_embed = []
+        embed_indices = []
+        for i, chunk in enumerate(chunks):
+            ch = chunk['content_hash']
+            if ch in existing_hashes:
+                # 已存在相同内容的嵌入，从 ChromaDB 查找现有向量
+                logger.info(f"[Pipeline] 跳过重复块 #{chunk['index']} (hash={ch[:8]}...)")
+                # 从已有记录中获取嵌入向量（从 ChromaDB search 恢复）
+                found_emb = self._lookup_embedding_by_hash(
+                    course_id, ch, ai_config
+                )
+                if found_emb:
+                    mem_embeddings[ch] = found_emb
+                else:
+                    # 兜底：仍需要嵌入
+                    chunks_to_embed.append(chunk['content'])
+                    embed_indices.append(i)
+            else:
+                chunks_to_embed.append(chunk['content'])
+                embed_indices.append(i)
+
+        # 只对真正需要的新块调用批量嵌入
+        if chunks_to_embed:
+            new_embeddings = embedding_service.embed_texts(
+                chunks_to_embed, ai_config=ai_config
+            )
+            # 按原始顺序填入
+            for idx, emb in zip(embed_indices, new_embeddings):
+                mem_embeddings[chunks[idx]['content_hash']] = emb
+
+        # 按原始 chunk 顺序组装最终嵌入列表
+        embeddings = [mem_embeddings.get(c['content_hash'], [])
+                      for c in chunks]
+
+        embed_count = len(chunks_to_embed)
+        skip_count = len(chunks) - embed_count
+        msg = f'嵌入完成: {embed_count} 新 + {skip_count} 去重, {embedding_service.get_dimension()}维'
         self._log_stage(doc_id, 'embedding', 'success',
                         msg, int((time.time() - t0) * 1000))
 
-        # Stage 7: 索引
+        # Stage 7: 索引（BM25 先于向量存储 — BM25 纯本地无依赖，优先保证关键词检索可用）
         self._update_stage(doc_id, 'indexing', 0.9)
         t0 = time.time()
-        # 向量存储
-        vector_store.add_chunks(course_id, chunks, embeddings)
-        # BM25 索引（始终可用，纯本地无网络依赖）
-        bm25_manager.build_index(course_id, chunks)
-        self._log_stage(doc_id, 'indexing', 'success',
-                        f'索引完成, BM25+向量', int((time.time() - t0) * 1000))
 
-        # 保存分块到数据库
+        # 7a. BM25 索引 — 全量重建，纯本地，始终可用
+        bm25_manager.build_index(course_id, chunks)
+
+        # 7b. 向量存储 — 可能有网络依赖（嵌入 API），失败不影响 BM25
+        chunks_with_emb = [
+            (c, emb) for c, emb in zip(chunks, embeddings) if emb
+        ]
+        vector_ok = True
+        if chunks_with_emb:
+            try:
+                vector_store.add_chunks(course_id,
+                    [c for c, _ in chunks_with_emb],
+                    [emb for _, emb in chunks_with_emb])
+            except Exception as e:
+                logger.warning(f"[Pipeline] 向量存储失败（BM25 仍可用）: {e}")
+                vector_ok = False
+
+        self._log_stage(doc_id, 'indexing', 'success',
+                        f'索引完成: BM25=✓ 向量={"✓" if vector_ok else "✗"}'
+                        f' (向量去重后 {len(chunks_with_emb)}/{len(chunks)} 块)',
+                        int((time.time() - t0) * 1000))
+
+        # 仅在索引成功后保存分块到数据库（原子性：全成功或全不做）
+        # 如果向量存储失败但 BM25 成功，仍然保存（纯 BM25 可工作）
         self._save_chunks_to_db(doc_id, course_id, chunks, embeddings)
 
         # 保存文档元数据
@@ -294,15 +356,6 @@ class AsyncPipeline:
             metadata_json=json.dumps(metadata, ensure_ascii=False),
         )
 
-        # 保存 chroma_id 关联
-        for chunk, embedding in zip(chunks, embeddings):
-            # 更新数据库中块的 chroma_id
-            from database import db
-            db.update(
-                "UPDATE document_chunks SET chroma_id = ? WHERE id = ?",
-                (f"chunk_{course_id}_{doc_id}_{chunk['index']}", 0)  # placeholder
-            )
-
     def _save_chunks_to_db(self, doc_id, course_id, chunks, embeddings):
         """将分块保存到 document_chunks 表"""
         from database import db
@@ -312,11 +365,14 @@ class AsyncPipeline:
 
         for chunk, embedding in zip(chunks, embeddings):
             chroma_id = f"chunk_{course_id}_{doc_id}_{chunk['index']}"
+            # content_hash 用于去重优化，避免重复嵌入相同文本
+            content_hash = chunk.get('content_hash', '')
             chunk_id = db.insert(
                 """INSERT INTO document_chunks
                    (document_id, course_id, chunk_index, chunk_type, content,
-                    token_count, page_start, page_end, heading_path, metadata_json, chroma_id)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    token_count, page_start, page_end, heading_path,
+                    metadata_json, chroma_id, content_hash)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     doc_id,
                     course_id,
@@ -329,6 +385,7 @@ class AsyncPipeline:
                     chunk.get('heading_path', ''),
                     json.dumps(chunk.get('metadata', {}), ensure_ascii=False),
                     chroma_id,
+                    content_hash,
                 )
             )
 
@@ -426,6 +483,62 @@ class AsyncPipeline:
         doc_url = (ai_config.get('doc_api_url') or '').strip()
         doc_key = (ai_config.get('doc_api_key') or '').strip()
         return bool(doc_url or doc_key)
+
+    # ==================== 内容哈希去重 ====================
+
+    def _get_existing_content_hashes(self, course_id):
+        """
+        查询课程已有的所有内容哈希（避免重复嵌入）
+
+        相同内容的文本块重新上传时无需再次调用嵌入 API
+        """
+        from database import db
+        try:
+            rows = db.fetch_all(
+                "SELECT DISTINCT content_hash FROM document_chunks "
+                "WHERE course_id = ? AND content_hash != ''",
+                (course_id,)
+            )
+            return {row['content_hash'] for row in rows} if rows else set()
+        except Exception as e:
+            logger.warning(f"[Pipeline] 查询已有内容哈希失败: {e}")
+            return set()
+
+    def _lookup_embedding_by_hash(self, course_id, content_hash, ai_config):
+        """
+        根据内容哈希查找已存在的嵌入向量
+
+        从 ChromaDB 搜索匹配的块，如果能找到，返回其嵌入向量。
+        否则返回 None，由上游决定是否重新嵌入。
+        """
+        from database import db
+        from services.vector_store import vector_store
+        try:
+            # 先找数据库中记录的第一个该哈希的块
+            row = db.fetch_one(
+                "SELECT chroma_id FROM document_chunks "
+                "WHERE course_id = ? AND content_hash = ? AND chroma_id != '' "
+                "LIMIT 1",
+                (course_id, content_hash)
+            )
+            if row and row.get('chroma_id'):
+                chroma_id = row['chroma_id']
+                # 从 ChromaDB 查询这个块来获取向量
+                try:
+                    collection = vector_store.get_or_create_collection(course_id)
+                    if collection:
+                        result = collection.get(
+                            ids=[chroma_id],
+                            include=['embeddings']
+                        )
+                        if result and result.get('embeddings') and result['embeddings'][0]:
+                            return result['embeddings'][0]
+                except Exception:
+                    pass
+            return None
+        except Exception as e:
+            logger.warning(f"[Pipeline] 查找已有嵌入向量失败: {e}")
+            return None
 
     def _build_md_output_dir(self, course_name):
         """构建 MinerU 输出目录: backend/uploads/{safe_course_name}/"""

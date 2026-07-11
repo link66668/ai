@@ -33,6 +33,7 @@ lxml>=5.1.0                # 快速HTML/XML解析器
 
 # AI与嵌入
 openai>=1.12.0             # DeepSeek API + MaaS 嵌入/视觉（OpenAI兼容）
+httpx>=0.27.0              # HTTP客户端（用于 rerank API 调用）
 
 # 向量与检索
 # chromadb>=0.4.24          # 向量数据库 — Python 3.13 需要 chroma-hnswlib 编译环境

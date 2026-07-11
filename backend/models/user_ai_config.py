@@ -78,6 +78,7 @@ class UserAIConfig:
             ('embedding', ('embedding_api_key', 'embedding_api_url', 'embedding_model', None)),
             ('vision',    ('vision_api_key', 'vision_api_url', 'vision_model', 'vision_enabled')),
             ('doc',       ('doc_api_key', 'doc_api_url', 'doc_model', None)),
+            ('rerank',    ('rerank_api_key', 'rerank_api_url', 'rerank_model', None)),
         ]:
             p = _legacy(legacy_type, *info)
             if p:
@@ -110,4 +111,8 @@ class UserAIConfig:
             'doc_api_key': _resolve('doc', 'api_key', ''),
             'doc_api_url': _resolve('doc', 'api_url', ''),
             'doc_model': _resolve('doc', 'model', 'vlm'),
+
+            'rerank_api_key': _resolve('rerank', 'api_key', Config.RERANK_API_KEY),
+            'rerank_api_url': _resolve('rerank', 'api_url', Config.RERANK_API_URL),
+            'rerank_model': _resolve('rerank', 'model', Config.RERANK_MODEL),
         }

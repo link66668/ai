@@ -210,6 +210,21 @@ class Database:
                 )
             ''')
 
+            # ========== 增量迁移 ==========
+
+            # 1. document_chunks 添加 content_hash（去重优化）
+            try:
+                cursor.execute("ALTER TABLE document_chunks ADD COLUMN content_hash TEXT DEFAULT ''")
+            except sqlite3.OperationalError:
+                pass  # 列已存在
+
+            # 2. user_ai_config 添加 rerank 字段
+            for col in ['rerank_api_key TEXT DEFAULT ""', 'rerank_api_url TEXT DEFAULT ""', 'rerank_model TEXT DEFAULT ""']:
+                try:
+                    cursor.execute(f"ALTER TABLE user_ai_config ADD COLUMN {col}")
+                except sqlite3.OperationalError:
+                    pass
+
             conn.commit()
         except Exception as e:
             print(f"[数据库初始化错误] {e}")
