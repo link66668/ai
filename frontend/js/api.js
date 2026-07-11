@@ -283,9 +283,12 @@ class ApiClient {
      * @param {function} onChunk - 每收到一个token的回调 (delta, fullText)
      * @param {function} onDone - 流结束回调 (fullText, citations)
      * @param {function} onError - 错误回调 (error)
+     * @param {object} callbacks - 附加回调
+     * @param {function} [callbacks.onToolCallStart] - 工具调用开始 (toolName, args)
+     * @param {function} [callbacks.onToolCallEnd] - 工具调用结束 (toolName, resultCount)
      * @returns {AbortController} 用于中断的控制器
      */
-    streamMessage(convId, content, tempFileSessionId, kbCourseId, onChunk, onDone, onError) {
+    streamMessage(convId, content, tempFileSessionId, kbCourseId, onChunk, onDone, onError, callbacks = {}) {
         const token = this.getToken();
         const controller = new AbortController();
 
@@ -327,13 +330,38 @@ class ApiClient {
                     if (line.startsWith('data: ')) {
                         try {
                             const data = JSON.parse(line.slice(6));
-                            if (data.done) {
+                            const type = data.type || '';
+
+                            if (type === 'tool_call_start') {
+                                // LLM 决定搜索知识库
+                                if (callbacks.onToolCallStart) {
+                                    callbacks.onToolCallStart(
+                                        data.function || 'kb_search',
+                                        data.arguments || {}
+                                    );
+                                }
+                                continue;
+                            }
+
+                            if (type === 'tool_call_end') {
+                                // 搜索结果已返回
+                                if (callbacks.onToolCallEnd) {
+                                    callbacks.onToolCallEnd(
+                                        data.function || 'kb_search',
+                                        data.result_count || 0
+                                    );
+                                }
+                                continue;
+                            }
+
+                            // 普通文本事件（兼容旧格式无 type 字段）
+                            const isDone = data.done || (type === 'text' && data.done);
+                            if (isDone) {
                                 if (data.interrupted) {
                                     onDone(fullText, citations, true);
                                     return;
                                 }
                                 citations = data.citations || [];
-                                // 如果有完整响应，确保已显示
                                 if (data.full_response) {
                                     fullText = data.full_response;
                                 }

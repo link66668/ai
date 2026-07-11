@@ -1956,6 +1956,23 @@ table tbody tr:hover {
     border-radius: 2px;
 }
 
+/* 引用来源卡片高亮（点击 inline 引用时） */
+.msg-refs-item.highlight {
+    background: #fef3c7;
+    border-color: #f59e0b;
+    box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.3);
+    transition: background 0.3s, border-color 0.3s, box-shadow 0.3s;
+}
+
+/* 来源卡片滚动目标 — 闪烁动画 */
+@keyframes ref-blink {
+    0%, 100% { box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.3); }
+    50% { box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.6); }
+}
+.msg-refs-item.highlight {
+    animation: ref-blink 1s ease-in-out 3;
+}
+
 /* 临时文件徽章 */
 .temp-file-badge {
     display: inline-block;
@@ -1967,6 +1984,30 @@ table tbody tr:hover {
     margin: 0 2px;
     font-weight: 500;
     white-space: nowrap;
+}
+
+/* 工具调用状态 — 仿 cherry-studio 搜索知识库动画 */
+.tool-status {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 0;
+    font-size: 13px;
+    color: var(--primary);
+    animation: tool-fade-in 0.3s ease-out;
+}
+.tool-status.hidden { display: none; }
+.tool-status-icon {
+    display: inline-block;
+    animation: tool-search-bounce 1s ease-in-out infinite;
+}
+@keyframes tool-fade-in {
+    from { opacity: 0; transform: translateY(-4px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes tool-search-bounce {
+    0%, 100% { transform: translateY(0); }
+    50%      { transform: translateY(-3px); }
 }
 
 /* 停止按钮 */

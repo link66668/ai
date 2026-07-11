@@ -495,6 +495,10 @@
                         <span class="dot"></span>
                         <span class="dot"></span>
                     </div>
+                    <div class="tool-status hidden" id="${aiMsgId}-tool">
+                        <span class="tool-status-icon">🔍</span>
+                        <span class="tool-status-text">搜索知识库...</span>
+                    </div>
                 </div>
                 <div class="msg-refs hidden" id="${aiMsgId}-refs"></div>
                 <span class="msg-time">${formatMessageTime(new Date().toISOString())}</span>
@@ -512,12 +516,20 @@
         const bubble = aiMsgEl.querySelector('.msg-bubble');
         const refsEl = document.getElementById(`${aiMsgId}-refs`);
 
-        // 调用 SSE 流式 API
+        // 工具状态 UI 元素
+        const toolStatus = document.getElementById(`${aiMsgId}-tool`);
+        const toolText = toolStatus ? toolStatus.querySelector('.tool-status-text') : null;
+
+        // 调用 SSE 流式 API（第4参数 = 工具事件回调）
         currentStreamController = api.streamMessage(
             streamConvId, content, tempFileSessionId, selectedKbCourseId,
 
             // onChunk — rAF 批处理渲染
             (delta, fullText) => {
+                // 隐藏工具状态（开始出文字了）
+                if (toolStatus && !toolStatus.classList.contains('hidden')) {
+                    toolStatus.classList.add('hidden');
+                }
                 scheduleStreamUpdate(bubble, fullText, container);
             },
 
@@ -531,6 +543,9 @@
 
                 // 替换 streaming dots 为最终 markdown
                 bubble.innerHTML = renderMarkdown(finalText);
+
+                // 初始化 inline 引用可点击交互
+                initCitationClicks(bubble);
 
                 // 显示引用来源 — 知识库文件来源卡片
                 if (citations && citations.length) {
@@ -548,7 +563,7 @@
                                 const heading = r.heading_path
                                     ? ` <span class="ref-heading">› ${escapeHtml(r.heading_path)}</span>`
                                     : '';
-                                return `<span class="msg-refs-item">`
+                                return `<span class="msg-refs-item" data-ref-num="${r.num}">`
                                     + `<span class="ref-num">${r.num}</span>`
                                     + `<span class="ref-name" title="${escapeHtml(name)}">${escapeHtml(name)}</span>`
                                     + heading
@@ -576,11 +591,36 @@
                 pendingStreamText = null;
                 lastStableHtml = '';
                 lastStableBoundary = -1;
+                if (toolStatus) toolStatus.classList.add('hidden');
 
                 bubble.innerHTML = '<em style="color:var(--gray-500)">AI 服务暂时不可用: ' + escapeHtml(error.message) + '</em>';
                 setStreamingUI(false);
                 currentStreamController = null;
                 showToast('发送失败: ' + error.message, 'error');
+            },
+            // 工具事件回调（仿 cherry-studio tool calling UI）
+            {
+                onToolCallStart: (tool, args) => {
+                    if (!toolStatus || !toolText) return;
+                    toolText.textContent = '搜索知识库...';
+                    toolStatus.className = 'tool-status';
+                    // 隐藏 loading dots（还没出文字）
+                    const dots = bubble.querySelector('.streaming-dots');
+                    if (dots) dots.style.display = 'none';
+                },
+                onToolCallEnd: (tool, resultCount) => {
+                    if (!toolStatus || !toolText) return;
+                    const foundText = resultCount > 0
+                        ? '📚 找到 ' + resultCount + ' 条参考资料'
+                        : '📚 未找到相关结果';
+                    toolText.textContent = foundText;
+                    // 显示一会儿后隐藏
+                    setTimeout(() => {
+                        toolStatus.classList.add('hidden');
+                        const dots = bubble.querySelector('.streaming-dots');
+                        if (dots) dots.style.display = '';
+                    }, 2000);
+                },
             }
         );
     }
@@ -691,6 +731,47 @@
         });
 
         document.getElementById('kbDropdown').classList.add('hidden');
+    }
+
+    /**
+     * 初始化 inline 引用交互
+     * 点击 [N] → 滚动到对应来源卡片并高亮
+     * hover 显示来源文档摘要
+     *
+     * 对应 cherry-studio CitationTooltip 的简化实现：
+     * 通过查找 refs-list 中的对应卡片，获取文档名展示
+     */
+    function initCitationClicks(container) {
+        if (!container) return;
+        container.querySelectorAll('sup.citation').forEach(el => {
+            // 点击 → 滚动到来源卡片并高亮
+            el.addEventListener('click', function(e) {
+                e.stopPropagation();
+                const num = this.dataset.cite;
+                if (!num) return;
+                const target = document.querySelector(
+                    '.msg-refs-item[data-ref-num="' + num + '"]'
+                );
+                if (target) {
+                    document.querySelectorAll('.msg-refs-item.highlight')
+                        .forEach(h => h.classList.remove('highlight'));
+                    target.classList.add('highlight');
+                    target.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                    setTimeout(() => target.classList.remove('highlight'), 3000);
+                }
+            });
+
+            // hover 时动态设置 title 提示（来源文档名）
+            const citeNum = el.dataset.cite;
+            if (citeNum) {
+                const target = document.querySelector(
+                    '.msg-refs-item[data-ref-num="' + citeNum + '"] .ref-name'
+                );
+                if (target) {
+                    el.title = target.textContent;
+                }
+            }
+        });
     }
 
     // 点击外部关闭知识库下拉菜单

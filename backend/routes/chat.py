@@ -125,13 +125,14 @@ def send_message_stream(current_user, conv_id):
     """
     发送消息并流式返回 (SSE)
 
-    数据流 (对应 chat-app useChat.send → streamChat):
+    数据流:
       1. 保存用户消息到 DB
       2. 获取对话历史
       3. chat_engine.process() → (SSE生成器, citations)
-      4. 流式传输中：累积 full_response，保存 assistant 消息
+      4. 流式传输 + 流结束后验证引用 → 保存到 DB
     """
     from services.chat_engine import chat_engine
+    from services.knowledge_service import knowledge_service
 
     conv = Conversation.find_by_id(conv_id)
     if not conv:
@@ -146,9 +147,8 @@ def send_message_stream(current_user, conv_id):
 
     content = data.get('content', '').strip()
     temp_file_session_id = data.get('temp_file_session_id')
-    kb_course_id = data.get('kb_course_id')  # 用户选择的知识库课程 ID（可选）
+    kb_course_id = data.get('kb_course_id')
 
-    # 允许纯文件上传（无文字消息），但不能两者都为空
     if not content and not temp_file_session_id:
         return error_response('消息内容不能为空')
 
@@ -163,20 +163,16 @@ def send_message_stream(current_user, conv_id):
     from models.user_ai_config import UserAIConfig
     ai_config = UserAIConfig.get_effective_config(current_user['id'])
 
-    # 确定 RAG 知识库 — 仅由左下角知识库选择器控制：
-    #   kb_course_id = ''    → 用户明确选了"不引用"，禁用 RAG
-    #   kb_course_id = <id>  → 用户选了特定课程作为知识库
-    #   kb_course_id = None  → 未选择，不使用 RAG
-    # 注意：右上角课程选择器只控制对话归属和列表过滤，不影响 RAG。
+    # 确定 RAG 知识库
     if kb_course_id == '':
-        rag_course_id = None  # 明确禁用 RAG
+        rag_course_id = None
     elif kb_course_id is not None:
-        rag_course_id = kb_course_id  # 使用用户选定的知识库
+        rag_course_id = kb_course_id
     else:
-        rag_course_id = None  # 未选择 → 不检索知识库，纯 AI 对话
+        rag_course_id = None
 
-    # ---- Step 4: chat_engine 管线 (resolve_context → build_messages → stream) ----
-    stream_gen, citations = chat_engine.process(
+    # ---- Step 4: chat_engine 管线（工具循环） ----
+    stream_gen, captured_citations = chat_engine.process(
         message=content,
         course_id=rag_course_id,
         conversation_history=history_list,
@@ -185,36 +181,56 @@ def send_message_stream(current_user, conv_id):
         conversation_id=conv_id,
     )
 
-    # ---- Step 5: 流式传输 + DB 持久化 ----
+    # captured_citations 在 stream_gen 消费过程中由 kb_search 工具填充
+    # 初始为空，流结束后才完整
+
+    # ---- Step 5: 流式传输 + 引用验证 + DB 持久化 ----
     def generate():
+        nonlocal captured_citations
         full_response = ''
 
         for event in stream_gen:
             if event.startswith('data: '):
                 try:
                     event_data = json.loads(event[6:])
+                    event_type = event_data.get('type', '')
+
+                    if event_type == 'tool_call_start':
+                        # LLM 决定搜索知识库 → 透传，前端显示"正在搜索..."
+                        yield event
+                        continue
+
+                    elif event_type == 'tool_call_end':
+                        # 搜索结果已返回 → 透传，前端显示"找到 N 条"
+                        yield event
+                        continue
+
+                    # 以下处理普通文本事件
                     if event_data.get('done'):
                         interrupted = event_data.get('interrupted', False)
 
+                        # 引用验证：只保留回答中实际引用的来源
+                        full_response = event_data.get('full_response', '') or full_response
+                        used_citations = knowledge_service.verify_citations(
+                            full_response, captured_citations
+                        )
+
+                        # 注入验证后的引用到 SSE done 事件
+                        event_data['citations'] = used_citations
+                        event = 'data: ' + json.dumps(event_data, ensure_ascii=False) + '\n\n'
+
                         # 保存 assistant 回复到数据库
                         if full_response.strip():
-                            refs = [
-                                {
-                                    'num': c.get('num'),
-                                    'document_id': c.get('document_id', ''),
-                                    'heading_path': c.get('heading_path', ''),
-                                    'source': c.get('source', 'course_kb'),
-                                }
-                                for c in citations
-                            ]
-                            Message.create(conv_id, 'assistant', full_response, refs)
+                            Message.create(conv_id, 'assistant', full_response, used_citations)
 
                         # 首条消息 → 用内容作标题
                         if not interrupted and len(history) <= 1:
                             title = content[:20] + ('...' if len(content) > 20 else '')
                             Conversation.update_title(conv_id, title)
+
                     else:
                         full_response += event_data.get('content', '')
+
                 except json.JSONDecodeError:
                     pass
             yield event

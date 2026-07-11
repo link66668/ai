@@ -17,14 +17,6 @@ class RetrievalService:
 
     RRF_K = 60  # RRF 融合参数
 
-    def __init__(self):
-        from services.token_counter import token_counter as _tc
-        self._tc = _tc
-
-    def count_tokens(self, text):
-        """计算 token 数量（委托给共享计数器）"""
-        return self._tc.count(text)
-
     def hybrid_search(self, course_id, query, top_k=10, metadata_filter=None, ai_config=None):
         """
         混合检索 — 有嵌入模型时走向量+BM25 RRF融合，否则纯BM25
