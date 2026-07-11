@@ -16,6 +16,7 @@ python-multipart==0.0.6
 
 # 其他工具
 python-dotenv==1.0.0
+requests>=2.31.0
 
 # ========== 全格式文档引擎 + RAG 新增依赖 ==========
 

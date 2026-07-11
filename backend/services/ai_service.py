@@ -7,7 +7,7 @@ from models.document import Document
 from models.course import Course
 
 class AIService:
-    """模拟AI服务 - 课程学习助手"""
+    """AI服务 - 课程学习助手"""
 
     def __init__(self):
         self.course_contexts = {}  # 缓存课程上下文
@@ -158,7 +158,60 @@ class AIService:
 
         return points
 
-    def decompose_task(self, task_title, description='', total_days=7, ai_config=None):
+    def generate_study_plan(self, course_name, goal, exam_date, daily_hours):
+        """生成学习计划"""
+        from datetime import datetime, timedelta
+
+        # 计算距离考试的天数
+        if exam_date:
+            exam = datetime.strptime(exam_date, '%Y-%m-%d')
+            days_left = (exam - datetime.now()).days
+        else:
+            days_left = 30  # 默认30天
+
+        # 生成计划
+        plan = {
+            'course': course_name,
+            'goal': goal,
+            'total_days': days_left,
+            'daily_hours': daily_hours,
+            'phases': []
+        }
+
+        # 分阶段
+        if days_left >= 30:
+            phases = [
+                {'name': '基础阶段', 'days': days_left // 3, 'focus': '系统学习基础知识'},
+                {'name': '提高阶段', 'days': days_left // 3, 'focus': '重点难点突破'},
+                {'name': '冲刺阶段', 'days': days_left - 2 * (days_left // 3), 'focus': '模拟练习与复习'}
+            ]
+        else:
+            phases = [
+                {'name': '学习阶段', 'days': days_left * 2 // 3, 'focus': '核心知识点学习'},
+                {'name': '复习阶段', 'days': days_left - days_left * 2 // 3, 'focus': '综合复习'}
+            ]
+
+        plan['phases'] = phases
+
+        # 生成每日计划
+        daily_plan = []
+        current_date = datetime.now()
+
+        for i in range(min(days_left, 7)):  # 只生成前7天的详细计划
+            date = current_date + timedelta(days=i)
+            daily_plan.append({
+                'date': date.strftime('%Y-%m-%d'),
+                'weekday': ['周一', '周二', '周三', '周四', '周五', '周六', '周日'][date.weekday()],
+                'tasks': [
+                    f'复习笔记 {daily_hours/2:.1f}小时',
+                    f'做题练习 {daily_hours/2:.1f}小时'
+                ]
+            })
+
+        plan['daily_schedule'] = daily_plan
+        return plan
+
+    def decompose_task(self, task_title, description='', total_days=7, ai_config=None, daily_hours=None):
         """任务分解 - 增强版：支持自然语言智能拆解，含多课程编排"""
         from datetime import datetime, timedelta
 
@@ -168,13 +221,16 @@ class AIService:
         if parsed and parsed.get('total_days'):
             total_days = parsed['total_days']
 
+        # 优先使用显式传入的 daily_hours，否则用自然语言解析的结果
+        effective_daily_hours = daily_hours if daily_hours and daily_hours > 0 else parsed.get('daily_hours', 2.0) if parsed else 2.0
+
         # 多课程编排：按日课表生成
         if parsed and parsed.get('is_multi_course') and total_days >= 3:
             return self._generate_multi_course_smart_subtasks(
                 parsed['course_names'],
                 parsed.get('goal_type', '复习'),
                 total_days,
-                parsed.get('daily_hours', 2.0),
+                effective_daily_hours,
                 ai_config=ai_config,
             )
 
@@ -184,49 +240,30 @@ class AIService:
                 parsed['course_names'][0],
                 parsed.get('goal_type', '复习'),
                 total_days,
-                parsed.get('daily_hours', 2.0),
+                effective_daily_hours,
                 ai_config=ai_config,
+                match_source=parsed.get('_match_source'),
             )
 
-        subtasks = []
-        current_date = datetime.now()
+        # 有课程名但天数不足3天 → 也尝试 LLM 生成
+        if parsed and parsed.get('course_names'):
+            return self._generate_smart_subtasks(
+                parsed['course_names'][0],
+                parsed.get('goal_type', '复习'),
+                max(total_days, 3),
+                effective_daily_hours,
+                ai_config=ai_config,
+                match_source=parsed.get('_match_source'),
+            )
 
-        if '复习' in task_title or '考试' in task_title:
-            task_templates = [
-                '整理课程笔记和知识点',
-                '回顾重点概念和公式',
-                '完成课后习题',
-                '做历年真题',
-                '查漏补缺，强化薄弱环节'
-            ]
-        elif '实验' in task_title or '作业' in task_title:
-            task_templates = [
-                '分析任务要求和目标',
-                '查阅相关资料',
-                '制定实施方案',
-                '执行具体操作',
-                '总结并撰写报告'
-            ]
-        else:
-            task_templates = [
-                '明确任务目标',
-                '收集所需资料',
-                '制定详细计划',
-                '执行任务内容',
-                '检查和完善成果'
-            ]
+        # 完全未识别课程名 → 用原始文本问 LLM
+        if total_days >= 3:
+            llm_plan = self._llm_generate_from_raw_text(full_text, total_days, ai_config=ai_config)
+            if llm_plan:
+                return self._build_subtasks_from_plan(llm_plan)
 
-        days_per_task = max(1, total_days // len(task_templates))
-
-        for i, template in enumerate(task_templates):
-            due_date = current_date + timedelta(days=days_per_task * (i + 1))
-            subtasks.append({
-                'title': template,
-                'due_date': due_date.strftime('%Y-%m-%d'),
-                'order': i + 1
-            })
-
-        return subtasks
+        # 最终兜底 —— 分阶段通用模板
+        return self._mock_generate_subtasks(task_title, '学习', max(total_days, 3), effective_daily_hours)
 
     def _parse_nl_task(self, text):
         """
@@ -240,6 +277,7 @@ class AIService:
         result = {}
 
         # 1. 提取时长
+        cn_num = {'一':1,'二':2,'两':2,'三':3,'四':4,'五':5,'六':6,'七':7,'八':8,'九':9,'十':10}
         duration_patterns = [
             (r'(\d+)\s*周', lambda x: int(x) * 7),
             (r'(\d+)\s*天', lambda x: int(x)),
@@ -248,11 +286,15 @@ class AIService:
             (r'三\s*周', lambda x: 21),
             (r'半\s*个?\s*月', lambda x: 15),
             (r'一\s*个?\s*月', lambda x: 30),
+            (r'([一两二三四五六七八九十])\s*天', lambda x: cn_num.get(x, 7)),
         ]
         for pattern, converter in duration_patterns:
             match = re.search(pattern, text)
             if match:
-                result['total_days'] = converter(match.group(1)) if match.lastindex else converter(None)
+                try:
+                    result['total_days'] = converter(match.group(1))
+                except:
+                    result['total_days'] = converter(None)
                 break
 
         # 2. 提取目标类型
@@ -268,10 +310,13 @@ class AIService:
             result['goal_type'] = '实验'
         elif '项目' in text:
             result['goal_type'] = '项目'
+        elif '学完' in text or '学习' in text or '学' in text:
+            result['goal_type'] = '学习'
         else:
             result['goal_type'] = '学习'
 
         # 3. 提取课程名称（支持多课程）
+        # 课程关键词库 — 覆盖常见课程，用于兜底匹配
         course_keywords = [
             '高等数学', '线性代数', '概率论', '大学英语', '英语',
             'Python', 'C语言', 'Java', '数据结构', '算法',
@@ -281,31 +326,142 @@ class AIService:
             '马克思主义', '毛概', '思修', '近代史',
         ]
 
+        # 课程简称→全称映射表
+        course_aliases = {
+            '高数': '高等数学',
+            '大英': '大学英语',
+            '线代': '线性代数',
+            '大物': '大学物理',
+            '计网': '计算机网络',
+            'OS': '操作系统',
+            'DB': '数据库',
+            'ML': '机器学习',
+            'DL': '深度学习',
+            'DS': '数据结构',
+            '马原': '马克思主义',
+        }
+
         known_courses = self._get_known_course_names()
 
         found_courses = []
         remaining_text = text
+        # 去除常见的动作/时长/虚词，避免被当成课程名
+        _clean_patterns = ['两周', '三周', '一周', '一个月', '半个月',
+            '三天', '五天', '七天', '十天', '每天', '我要', '学完',
+            '学好', '学会', '掌握', '复习', '学习', '搞定', '搞懂',
+            '学期', '之内', '如何', '怎么', '需要', '帮忙', '帮我',
+            '开始', '准备', '预习', '完成', '今天', '明天',
+        ]
+        for _cp in _clean_patterns:
+            remaining_text = remaining_text.replace(_cp, ' ')
+        match_source = None  # 记录课程匹配来源
 
-        # 先匹配已知课程（精确匹配，避免"英语"匹配到"大学英语"的重复）
+        # 第一步：DB已有课程精确匹配
         sorted_known = sorted(known_courses, key=len, reverse=True)
         for cname in sorted_known:
             if cname in remaining_text:
                 found_courses.append(cname)
                 remaining_text = remaining_text.replace(cname, '', 1)
+                match_source = 'db'
 
-        # 再从关键词库中匹配剩余
+        # 第二步：简称映射 → 优先DB已有，否则用全称
+        if not found_courses:
+            for alias, full_name in sorted(course_aliases.items(), key=lambda x: -len(x[0])):
+                if alias in remaining_text:
+                    target = full_name if full_name in known_courses else full_name
+                    found_courses.append(target)
+                    remaining_text = remaining_text.replace(alias, '', 1)
+                    match_source = 'alias'
+
+        # 第三步：预置关键词库匹配（如"数据库"等课程名）
         if not found_courses:
             for kw in sorted(course_keywords, key=len, reverse=True):
                 if kw in remaining_text:
                     found_courses.append(kw)
                     remaining_text = remaining_text.replace(kw, '', 1)
+                    match_source = 'keyword'
 
-        # 如果有"和"、"、"、"与"等连接词但只找到1个课程，尝试在全文再搜一个
-        if len(found_courses) == 1 and re.search(r'[和、与,，]', text):
-            for kw in sorted(course_keywords, key=len, reverse=True):
-                if kw in remaining_text and kw != found_courses[0]:
-                    found_courses.append(kw)
+        # 第四步：用文本片段模糊匹配DB已有课程（如"数"→"高等数学"）
+        if not found_courses:
+            candidates = re.findall(r'[\u4e00-\u9fff]{2,6}|[a-zA-Z]{2,10}', remaining_text)
+            for cand in candidates:
+                # 先找DB中匹配的
+                for cname in known_courses:
+                    if cand in cname or cname in cand:
+                        found_courses.append(cname)
+                        match_source = 'fuzzy_db'
+                        break
+                if found_courses:
                     break
+                # 再找关键词库中匹配的
+                for kw in course_keywords:
+                    if cand == kw or cand in kw or kw in cand:
+                        found_courses.append(kw)
+                        match_source = 'fuzzy_kw'
+                        break
+                if found_courses:
+                    break
+
+        # 第五步：以上都失败，但文本中有2-4字中文词 → 直接作为课程名使用（未知课程）
+        if not found_courses:
+            candidates = re.findall(r'[\u4e00-\u9fff]{2,4}', remaining_text)
+            # 排除常见非课程词
+            skip_words = {'我要', '两周', '一周', '三天', '七天', '每天', '小时', '复习', '学完', '考试',
+                          '准备', '预习', '学习', '今天', '明天', '开始', '完成', '怎么', '如何',
+                          '好好', '帮忙', '帮我', '需要', '一个', '这个', '那个', '什么', '或者',
+                          '还有', '以及', '是否', '可以', '应该', '能够', '不能', '已经', '没有',
+                          '计划', '任务', '时间', '分钟', '之内', '期末', '期中', '之内',
+                          '我想', '想学', '学点', '东西', '知道', '学什', '但不', '不知'}
+            for cand in candidates:
+                if cand not in skip_words and len(cand) >= 2:
+                    found_courses.append(cand)
+                    match_source = 'guess'
+                    break
+
+        # 多课程：如果有连接词，在剩余文本中继续搜课程名
+        if re.search(r'[和、与,，]', text):
+            # 先尝试关键词库
+            for kw in sorted(course_keywords, key=len, reverse=True):
+                if kw in remaining_text and kw not in found_courses:
+                    found_courses.append(kw)
+                    remaining_text = remaining_text.replace(kw, '', 1)
+            # 再尝试英文课程名（Python, Java, C语言等）
+            en_candidates = re.findall(r'[a-zA-Z][a-zA-Z0-9+#]*', remaining_text)
+            for ec in en_candidates:
+                ec_clean = ec.strip().lower()
+                if ec_clean in ('python', 'java', 'c', 'cpp', 'c++', 'go', 'rust', 'sql',
+                                'html', 'css', 'javascript', 'js', 'php', 'ruby', 'swift',
+                                'kotlin', 'r', 'matlab', 'scala', 'perl', 'typescript', 'ts'):
+                    # 规范化常见写法
+                    canon = {'cpp': 'C++', 'js': 'JavaScript', 'ts': 'TypeScript'}.get(ec_clean, ec.title())
+                    if canon not in found_courses:
+                        found_courses.append(canon)
+                        remaining_text = remaining_text.replace(ec, '', 1)
+            # 最后尝试剩余中文词：先剥离连接词和干扰词再提取
+            clean_for_cn = re.sub(r'[和与、,，]+', ' ', remaining_text)
+            cn_candidates = re.findall(r'[\u4e00-\u9fff]{2,5}', clean_for_cn)
+            skip_words = {'我要', '两周', '一周', '三天', '七天', '每天', '小时', '复习', '学完', '考试',
+                          '准备', '预习', '学习', '今天', '明天', '开始', '完成', '怎么', '如何',
+                          '好好', '帮忙', '帮我', '需要', '一个', '这个', '那个', '什么', '或者',
+                          '还有', '以及', '是否', '可以', '应该', '能够', '不能', '已经', '没有',
+                          '计划', '任务', '时间', '分钟', '之内', '期末', '期中', '之内',
+                          '我想', '想学', '学点', '东西', '知道', '学什', '但不', '不知'}
+            skip_prefixes = {'学', '用', '做', '写', '看', '读', '上', '去', '来', '在', '要', '给', '把', '被', '从', '让'}
+            for cc in cn_candidates:
+                if cc in skip_words: continue
+                if any(cc.startswith(p) for p in skip_prefixes): continue
+                if not found_courses: break
+                # 尝试将短词映射到已知关键词（如 "网络" → "计算机网络"）
+                matched = False
+                for kw in course_keywords:
+                    if cc in kw and kw not in found_courses:
+                        found_courses.append(kw)
+                        remaining_text = remaining_text.replace(cc, '', 1)
+                        matched = True
+                        break
+                if not matched and cc not in found_courses:
+                    found_courses.append(cc)
+                    remaining_text = remaining_text.replace(cc, '', 1)
 
         # 去重
         seen = set()
@@ -314,7 +470,8 @@ class AIService:
         if found_courses:
             result['course_names'] = found_courses
             result['is_multi_course'] = len(found_courses) > 1
-        else:
+            result['_match_source'] = match_source
+        elif not result.get('total_days'):
             return None
 
         # 4. 提取时长和标记有效性
@@ -331,6 +488,11 @@ class AIService:
 
             return result
 
+        # 课程匹配成功但未识别天数 → 仍返回部分结果
+        if result.get('course_names'):
+            result['daily_hours'] = 2.0
+            return result
+
         return None
 
     def _get_known_course_names(self):
@@ -343,52 +505,58 @@ class AIService:
         except Exception:
             return []
 
-    def _generate_smart_subtasks(self, course_name, goal_type, total_days, daily_hours=2.0, ai_config=None):
+    def _generate_smart_subtasks(self, course_name, goal_type, total_days, daily_hours=2.0, ai_config=None, match_source=None):
         """生成智能阶段+每日任务拆解 - LLM优先，Mock兜底"""
         from datetime import datetime, timedelta
 
-        llm_plan = self._llm_generate_task_plan(course_name, goal_type, total_days, daily_hours, ai_config=ai_config)
+        llm_plan = self._llm_generate_task_plan(course_name, goal_type, total_days, daily_hours, ai_config=ai_config, match_source=match_source)
         if llm_plan:
-            subtasks = []
-            current_date = datetime.now()
-            order = 0
-
-            for phase in llm_plan.get('phases', []):
-                order += 1
-                phase_start = phase.get('start_day', 1)
-                phase_end = phase.get('end_day', total_days)
-                phase_name = phase.get('phase_name', '')
-
-                subtasks.append({
-                    'title': f'📋 {phase_name}（第{phase_start}-{phase_end}天）',
-                    'description': phase.get('focus', ''),
-                    'due_date': (current_date + timedelta(days=phase_end - 1)).strftime('%Y-%m-%d'),
-                    'order': order,
-                    'phase': phase_name,
-                    'is_phase_header': True,
-                })
-
-                for dt in phase.get('daily_tasks', []):
-                    order += 1
-                    day_num = dt.get('day', 1)
-                    date = current_date + timedelta(days=day_num - 1)
-                    task_title = dt.get('title', f'第{day_num}天学习任务')
-                    task_desc = dt.get('description', '')
-                    task_hours = dt.get('suggested_hours', daily_hours)
-
-                    subtasks.append({
-                        'title': f'第{day_num}天：{task_title}',
-                        'description': f'{task_desc}\n建议学习时长：{task_hours}小时',
-                        'due_date': date.strftime('%Y-%m-%d'),
-                        'order': order,
-                        'phase': phase_name,
-                        'day': day_num,
-                        'is_daily_task': True,
-                    })
-
-            return subtasks
+            return self._build_subtasks_from_plan(llm_plan)
 
         return self._mock_generate_subtasks(course_name, goal_type, total_days, daily_hours)
+
+    def _build_subtasks_from_plan(self, llm_plan):
+        """将 LLM 规划结果转为 subtask 列表"""
+        from datetime import datetime, timedelta
+        subtasks = []
+        current_date = datetime.now()
+        order = 0
+        total_days = sum(p.get('end_day', 0) - p.get('start_day', 0) + 1 for p in llm_plan.get('phases', []))
+
+        for phase in llm_plan.get('phases', []):
+            order += 1
+            phase_start = phase.get('start_day', 1)
+            phase_end = phase.get('end_day', total_days)
+            phase_name = phase.get('phase_name', '')
+
+            subtasks.append({
+                'title': f'📋 {phase_name}（第{phase_start}-{phase_end}天）',
+                'description': phase.get('focus', ''),
+                'due_date': (current_date + timedelta(days=phase_end - 1)).strftime('%Y-%m-%d'),
+                'order': order,
+                'phase': phase_name,
+                'is_phase_header': True,
+            })
+
+            for dt in phase.get('daily_tasks', []):
+                order += 1
+                day_num = dt.get('day', 1)
+                date = current_date + timedelta(days=day_num - 1)
+                task_title = dt.get('title', f'第{day_num}天学习任务')
+                task_desc = dt.get('description', '')
+                task_hours = dt.get('suggested_hours', 2.0)
+
+                subtasks.append({
+                    'title': f'第{day_num}天：{task_title}',
+                    'description': f'{task_desc}\n建议学习时长：{task_hours}小时',
+                    'due_date': date.strftime('%Y-%m-%d'),
+                    'order': order,
+                    'phase': phase_name,
+                    'day': day_num,
+                    'is_daily_task': True,
+                })
+
+        return subtasks
 
     def _mock_generate_subtasks(self, course_name, goal_type, total_days, daily_hours=2.0):
         """Mock 模式生成任务（原有逻辑）"""
@@ -437,8 +605,8 @@ class AIService:
 
         # 生成每日任务
         day = 1
+        knowledge_index = 0
         for phase in phases:
-            knowledge_index = 0
             for day_in_phase in range(phase['end'] - phase['start'] + 1):
                 order += 1
                 date = current_date + timedelta(days=day - 1)
@@ -451,7 +619,7 @@ class AIService:
 
                 day_task = {
                     'title': f'第{day}天：{task_title}',
-                    'description': f'{course_name} {goal_type} - {phase["name"]} 第{day_in_phase + 1}天，建议学习时长 {daily_hours} 小时',
+                    'description': f'今日重点：{task_title}。按照教学进度系统学习，结合笔记与练习题巩固所学内容，预计 {daily_hours} 小时。',
                     'due_date': date.strftime('%Y-%m-%d'),
                     'order': order,
                     'phase': phase['name'],
@@ -466,7 +634,14 @@ class AIService:
         return subtasks
 
     def _get_course_knowledge(self, course_name):
-        """从已上传的资料中获取课程知识点"""
+        """从已上传的资料中获取课程知识点——预设知识点优先"""
+        # 先检查是否有预设知识点
+        preset = self._get_default_knowledge(course_name)
+        is_preset = not preset[0].startswith(course_name + '核心') if preset else False
+
+        if is_preset:
+            return preset
+
         knowledge_points = []
         try:
             from models.document import Document
@@ -491,9 +666,9 @@ class AIService:
                             break
 
             if not knowledge_points:
-                knowledge_points = self._get_default_knowledge(course_name)
+                knowledge_points = preset
         except Exception:
-            knowledge_points = self._get_default_knowledge(course_name)
+            knowledge_points = preset
 
         return knowledge_points or [f'{course_name}核心知识点学习']
 
@@ -504,21 +679,112 @@ class AIService:
                 '函数的概念与性质', '极限的定义与计算', '极限运算法则',
                 '导数的概念与几何意义', '求导法则', '函数的单调性与极值',
                 '不定积分', '定积分的定义与性质', '定积分的应用',
-                '微分方程基础', '线性代数矩阵运算', '向量空间与线性变换',
+                '微分方程基础', '线性代数基础', '向量空间与线性变换',
             ],
             '线性代数': [
                 '矩阵的定义与基本运算', '行列式的计算', '矩阵的逆',
                 '向量组的线性相关性', '线性方程组的解法', '特征值与特征向量',
                 '二次型', '线性空间与线性变换',
             ],
-            'Python': [
-                '变量与数据类型', '条件判断与循环', '函数定义与调用',
+            '概率论': [
+                '随机事件与概率', '条件概率与独立性', '随机变量及其分布',
+                '多维随机变量', '数字特征', '大数定律与中心极限定理',
+            ],
+            'Python': ['变量与数据类型', '条件判断与循环', '函数定义与调用',
                 '列表与字典操作', '文件读写', '面向对象编程基础',
                 '异常处理机制', '模块与包管理',
             ],
+            'C语言': ['数据类型与运算符', '流程控制语句', '函数与递归',
+                '数组与字符串', '指针与内存管理', '结构体与联合体',
+                '文件操作', '动态内存分配',
+            ],
+            'Java': ['面向对象基础', '类与对象', '继承与多态',
+                '接口与抽象类', '集合框架', '异常处理', 'IO流', '多线程编程',
+            ],
+            '数据结构': ['线性表', '栈与队列', '树与二叉树',
+                '图结构', '查找算法', '排序算法', '哈希表',
+            ],
+            '算法': ['算法复杂度分析', '分治算法', '动态规划',
+                '贪心算法', '回溯算法', '图论算法', '字符串匹配',
+            ],
+            '计算机网络': ['网络体系结构', '物理层与数据链路层', '网络层',
+                '传输层TCP/UDP', '应用层协议', '网络安全基础',
+            ],
+            '操作系统': ['进程管理', '线程与并发', '内存管理',
+                '文件系统', '设备管理', '死锁处理', '进程调度算法',
+            ],
+            '数据库': ['关系模型', 'SQL语法', '数据库设计',
+                '事务与并发控制', '索引与查询优化', 'NoSQL入门',
+            ],
+            '机器学习': ['监督学习', '线性回归', '逻辑回归',
+                '决策树', '支持向量机', '集成学习', '聚类算法', '神经网络基础',
+            ],
+            '深度学习': ['神经网络基础', 'CNN卷积网络', 'RNN与LSTM',
+                'Transformer架构', '生成对抗网络', '迁移学习',
+                '模型训练技巧', 'PyTorch入门',
+            ],
+            '编译原理': [
+                '编译器概述与结构', '词法分析与正则表达式', '有限自动机',
+                '上下文无关文法', '自顶向下语法分析', '自底向上语法分析',
+                '语法制导翻译', '中间代码生成', '运行时环境',
+                '代码优化技术', '目标代码生成',
+            ],
+            '离散数学': [
+                '命题逻辑', '谓词逻辑', '集合论', '关系与函数',
+                '代数系统', '图论基础', '树与生成树路径', '组合计数',
+            ],
+            '计算机组成': [
+                '计算机系统概述', '数据表示', '运算方法',
+                '指令系统', '中央处理器', '存储层次结构', '输入输出系统',
+            ],
+            '大学物理': [
+                '质点运动学', '牛顿运动定律', '动量与能量',
+                '刚体转动', '静电场', '磁场', '电磁感应', '热力学基础',
+            ],
+            '电路分析': [
+                '电路基本定律', '电阻电路分析', '动态电路时域分析',
+                '正弦稳态分析', '互感与变压器', '频率响应',
+            ],
+            '信号与系统': [
+                '信号的基本概念', '线性时不变系统', '傅里叶级数',
+                '傅里叶变换', '拉普拉斯变换', 'Z变换', '采样定理',
+            ],
+            '模电': [
+                '半导体基础', '二极管及其电路', '三极管放大电路',
+                '场效应管', '集成运算放大器', '反馈放大电路', '信号处理电路',
+            ],
+            '数电': [
+                '逻辑代数基础', '组合逻辑电路', '时序逻辑电路',
+                '触发器', '计数器', '555定时器', 'ADC/DAC转换',
+            ],
             '大学英语': [
-                '词汇积累与记忆', '阅读理解的技巧', '听力训练',
-                '写作模板与范文', '语法重点复习', '翻译常见句式',
+                '词汇积累方法', '长难句分析', '阅读技巧',
+                '写作模板', '翻译技巧', '听力训练',
+            ],
+            '微观经济学': [
+                '供需理论', '弹性理论', '消费者选择',
+                '生产与成本', '市场结构', '博弈论基础',
+            ],
+            '宏观经济学': [
+                'GDP核算', 'IS-LM模型', 'AD-AS模型',
+                '失业与通货膨胀', '财政政策', '货币政策',
+            ],
+            '毛概': [
+                '毛泽东思想', '新民主主义革命', '社会主义改造',
+                '社会主义建设', '邓小平理论', '三个代表', '科学发展观',
+            ],
+            '马克思主义': [
+                '哲学基本问题', '唯物辩证法', '实践与认识',
+                '社会基本矛盾', '资本主义分析', '社会主义理论',
+            ],
+            '思修': [
+                '人生观与价值观', '理想信念', '中国精神',
+                '社会主义核心价值观', '法治思维', '道德规范',
+            ],
+            '近代史': [
+                '鸦片战争', '太平天国', '洋务运动',
+                '戊戌变法', '辛亥革命', '五四运动',
+                '抗日战争', '解放战争',
             ],
         }
 
@@ -533,56 +799,53 @@ class AIService:
         ]
 
     def _generate_daily_task_title(self, course_name, goal_type, phase_name, day_in_phase, knowledge, knowledge_index):
-        """根据阶段和知识点生成每日任务标题"""
+        """根据阶段和知识点生成每日任务标题——有具体知识点时返回章节式标题"""
         import re
 
-        if '基础' in phase_name or '学习' in phase_name:
-            if day_in_phase == 1:
-                return f'{course_name}课程大纲梳理与目标设定'
-            elif knowledge and knowledge_index < len(knowledge):
-                return f'学习并掌握：{knowledge[knowledge_index]}'
-            else:
-                return f'{course_name}基础知识学习'
+        # 获取当前知识点
+        kp = knowledge[knowledge_index] if knowledge and knowledge_index < len(knowledge) else ''
 
-        elif '强化' in phase_name or '提升' in phase_name:
-            tasks = [
-                f'{course_name}重点题型专项练习',
-                f'{course_name}知识点串联与体系构建',
-                f'{course_name}易错题整理与分析',
-                f'{course_name}综合解题能力训练',
-                f'{course_name}高频考点专项突破',
-            ]
-            return tasks[day_in_phase % len(tasks)]
+        # 判断知识点是否是"公式化兜底"（如 "编译原理核心概念掌握"）——不含课程名则算真实知识点
+        is_real_kp = kp and course_name not in kp and '核心概念' not in kp and '基础知识点' not in kp and '综合应用' not in kp and '重点难点' not in kp and '常见问题' not in kp and '典型题型' not in kp
 
-        elif '冲刺' in phase_name:
-            if day_in_phase == 1:
-                return f'{course_name}历年真题模拟测试'
-            elif day_in_phase <= 2:
-                return f'{course_name}真题错题分析与订正'
-            else:
-                return f'{course_name}高频考点回顾与巩固'
+        match_suffix = {
+            '基础': '概念理解与笔记整理',
+            '学习': '概念理解与笔记整理',
+            '强化': '题型练习与解题训练',
+            '提升': '题型练习与解题训练',
+            '冲刺': '真题演练与查漏补缺',
+            '查漏': '薄弱点回顾与巩固',
+            '复习': '知识点回顾与总结',
+            '巩固': '知识点回顾与总结',
+            '集中': '核心内容学习',
+        }
 
-        elif '查漏' in phase_name:
-            tasks = [
-                f'{course_name}薄弱知识点专项复习',
-                f'{course_name}全真模拟考试练习',
-                f'{course_name}易错知识点回顾',
-                f'{course_name}考前心态调整与重点回顾',
-            ]
-            return tasks[day_in_phase % len(tasks)]
+        suffix = '学习与练习'
+        for key, val in match_suffix.items():
+            if key in phase_name:
+                suffix = val
+                break
 
-        elif '复习' in phase_name or '巩固' in phase_name:
-            tasks = [
-                f'{course_name}知识体系回顾总结',
-                f'{course_name}错题重新练习',
-                f'{course_name}核心概念与公式速记',
-            ]
-            return tasks[day_in_phase % len(tasks)]
+        # 有真实章节知识点 → 直接用
+        if is_real_kp:
+            # 每隔一天轮换"学习"和"练习"模式
+            action = '理论精讲' if day_in_phase % 2 == 1 else '练习与巩固'
+            return f'{kp} — {action}'
 
+        # 兜底：用课程名+阶段生成公式化但合理的标题
+        day_actions = {
+            1: f'{course_name}课程框架梳理与学习目标制定',
+            2: f'{course_name}基础概念与核心术语学习',
+        }
+        if day_in_phase in day_actions:
+            return day_actions[day_in_phase]
+
+        if knowledge and knowledge_index < len(knowledge):
+            return f'{knowledge[knowledge_index]} — {suffix}'
         else:
-            return f'{course_name}学习任务（第{day_in_phase}天）'
+            return f'{course_name} — {suffix}（第{day_in_phase}天）'
 
-    def _llm_generate_task_plan(self, course_name, goal_type, total_days, daily_hours, ai_config=None):
+    def _llm_generate_task_plan(self, course_name, goal_type, total_days, daily_hours, ai_config=None, match_source=None):
         """调用大模型生成详细任务规划，失败返回 None"""
         cfg = ai_config or {}
         use_real_llm = cfg.get('use_real_llm', Config.USE_REAL_LLM)
@@ -595,6 +858,40 @@ class AIService:
         knowledge = self._get_course_knowledge(course_name)
         knowledge_text = '\n'.join([f'- {k}' for k in knowledge[:15]]) if knowledge else '无现有资料'
 
+        # 未知课程：让 LLM 先识别课程结构再规划
+        is_unknown = match_source in ('guess', 'fuzzy_kw', None)
+
+        if is_unknown:
+            user_prompt = f"""请为此课程制定极度详细的学习计划。
+
+用户请求：学习"{course_name}"
+目标：{goal_type}
+总天数：{total_days}天，每天约{daily_hours}小时
+开始日期：{today}
+
+重要：你比用户更了解这门课程。请先根据你的知识，列出"{course_name}"的典型章节和知识点体系，然后按照章节顺序制定每日计划。
+
+务必做到：
+1. 每天任务 title 必须带章节号（如"第一章§1.1 编译器概述"）
+2. description 按步骤写：学习具体知识点→练习/实操→总结，每步标注分钟数
+3. 阶段递进（基础→进阶→综合），最后1-2天安排总复习
+4. 每天约{daily_hours}小时
+5. 输出纯JSON，不要任何额外文字"""
+        else:
+            user_prompt = f"""请制定极度详细的学习任务计划：
+
+课程：{course_name}
+目标：{goal_type}
+总天数：{total_days}天，每天约{daily_hours}小时
+开始日期：{today}
+现有资料知识点：{knowledge_text}
+
+务必做到：
+1. 每天任务 title 必须带章节号（如"第二章§2.1 导数的概念与几何意义"）
+2. description 按步骤写：阅读教材哪几页→看哪一讲课件→做哪些习题（标注题号），每步标注分钟数
+3. 每天建议总时长约{daily_hours}小时，各小步时间之和要接近此值
+4. 输出纯JSON，不要任何额外文字"""
+
         messages = [
             {
                 'role': 'system',
@@ -602,72 +899,80 @@ class AIService:
             },
             {
                 'role': 'user',
-                'content': f"""请为以下学习目标制定详细的任务规划：
-
-课程名称：{course_name}
-目标类型：{goal_type}
-总天数：{total_days} 天
-每日学习时长：{daily_hours} 小时
-开始日期：{today}
-已有知识点资料：
-{knowledge_text}
-
-要求：
-1. 根据总天数合理划分阶段（2-4个阶段）
-2. 每个阶段生成每日具体任务，每天1-2个任务
-3. 每个任务标题要具体可执行，描述要详细（包含具体行动指南）
-4. 阶段安排要有渐进性，从基础到提升到冲刺
-5. 最后一天安排"考前心态调整与最终回顾"
-
-请严格按照JSON格式输出。"""
+                'content': user_prompt
             }
         ]
 
-        response = self._call_llm(messages, temperature=0.5, max_tokens=4096, ai_config=ai_config)
+        response = self._call_llm(messages, temperature=0.3, max_tokens=2048, ai_config=ai_config)
+        if not response:
+            return None
+
+        return self._parse_llm_task_plan(response)
+
+    def _llm_generate_from_raw_text(self, raw_text, total_days, ai_config=None):
+        """完全未识别课程名时，用原始文本直接问 LLM 生成计划"""
+        cfg = ai_config or {}
+        use_real_llm = cfg.get('use_real_llm', Config.USE_REAL_LLM)
+        if not use_real_llm:
+            return None
+
+        from datetime import datetime
+        today = datetime.now().strftime('%Y-%m-%d')
+
+        messages = [
+            {
+                'role': 'system',
+                'content': self._get_task_planning_system_prompt()
+            },
+            {
+                'role': 'user',
+                'content': f"""用户提出了以下学习任务，请为其制定极度详细的学习计划：
+
+任务描述：{raw_text}
+总天数：{total_days}天
+开始日期：{today}
+
+请先分析这个任务涉及什么课程/技能，列出典型的章节或学习模块，然后制定每日详细计划。
+每天任务 title 带章节号/模块名，description 步骤化并标注时间。
+输出纯JSON，不要任何额外文字。"""
+            }
+        ]
+
+        response = self._call_llm(messages, temperature=0.3, max_tokens=2048, ai_config=ai_config)
         if not response:
             return None
 
         return self._parse_llm_task_plan(response)
 
     def _get_task_planning_system_prompt(self):
-        return """你是一个专业的学习规划师和教育专家。你的任务是为学生制定详细、可执行的学习任务计划。
+        return """你是一个专业的学习规划师。为课程制定极度详细、可执行的学习计划。
 
-制定计划时遵循以下原则：
-1. **阶段性**：将学习周期划分为2-4个阶段（基础→强化→冲刺→查缺补漏）
-2. **可执行性**：每个任务都要具体明确，学生看到就知道该做什么
-3. **渐进性**：任务难度从基础概念逐步过渡到综合应用
-4. **劳逸结合**：适当安排复习日和休息调整
-5. **针对性**：针对考试类型（期末/期中/考研等）调整策略
+核心输出要求（逐条执行）：
+1. 按章节和知识点拆分：title 必须包含章节号、知识点名称。如"第一章§1.1 函数的概念与性质"
+2. description 必须极度详细：指定具体阅读教材哪几页、做哪些课后习题（题号）、看哪些课件、预计每小步耗时几分钟
+3. 阶段划分：2-4个阶段（基础→强化→冲刺→查缺补漏），最后一天安排"考前回顾与心态调整"
+4. suggested_hours 精确到0.5小时，与 description 中时间拆解一致
+5. 优先基于"已有知识点资料"来细化，资料中没有的章节也要合理规划进去
 
-输出严格的JSON格式，不要包含任何多余文字：
+输出纯JSON，不要任何解释文字：
 
 ```json
 {
-  "plan_summary": "一句话概括整个计划",
-  "phases": [
-    {
-      "phase_name": "阶段名称（如：基础夯实阶段）",
-      "start_day": 1,
-      "end_day": 7,
-      "focus": "该阶段的重点目标和策略（一句话）",
-      "daily_tasks": [
-        {
-          "day": 1,
-          "title": "具体任务标题（简短有力，5-15字）",
-          "description": "详细任务说明，包含具体要做什么、怎么做、注意事项（30-80字）",
-          "suggested_hours": 2.0
-        }
-      ]
-    }
-  ]
+  "plan_summary": "一句话概括",
+  "phases": [{
+    "phase_name": "基础夯实阶段",
+    "start_day": 1,
+    "end_day": 7,
+    "focus": "一句话",
+    "daily_tasks": [{
+      "day": 1,
+      "title": "第X章§X.X 知识点名称",
+      "description": "1.阅读教材PXX-PXX(XX分钟)→2.观看课件第X讲(XX分钟)→3.完成习题X.X-X.X(XX分钟)",
+      "suggested_hours": 2.0
+    }]
+  }]
 }
-```
-
-注意：
-- daily_tasks 数组必须覆盖从 start_day 到 end_day 的每一天
-- 每个任务标题必须具体（如"极限定义的理解与ε-δ语言练习"而非"学习极限"）
-- description 要给出操作指南（如"先阅读教材第二章，重点理解ε-δ定义，然后完成课后习题2.1-2.3"）
-- suggested_hours 是建议学习时长，可为浮点数"""
+```"""
 
     def _call_llm(self, messages, temperature=0.7, max_tokens=4096, ai_config=None):
         """调用 DeepSeek API"""
@@ -831,7 +1136,9 @@ class AIService:
         order = 0
 
         hours_per_course = daily_hours / n_courses
-        time_slots = ['上午', '下午', '晚上'][:n_courses]
+        # 支持 >3 门课程：轮换使用 上午/下午/晚上
+        all_time_slots = ['上午', '下午', '晚上']
+        time_slots = [all_time_slots[i % 3] for i in range(n_courses)]
         if n_courses == 2:
             course_time_map = {
                 course_names[0]: {'time': '上午', 'hours': daily_hours * 0.55},
@@ -895,94 +1202,57 @@ class AIService:
 
         messages = [
             {'role': 'system', 'content': self._get_multi_course_planning_system_prompt()},
-            {'role': 'user', 'content': f"""请为以下多课程学习目标制定详细的每日课表：
+            {'role': 'user', 'content': f"""请制定多课程并行日课表：
 
-课程列表：{courses_text}
-目标类型：{goal_type}
-总天数：{total_days} 天
-每日总学习时长：{daily_hours} 小时
-开始日期：{today}
-现有知识点：
-{knowledge_summary[:2000]}
+课程：{courses_text}
+目标：{goal_type}
+天数：{total_days}天，每天约{daily_hours}小时
+开始：{today}
+现有资料：{knowledge_summary[:2000]}
 
 要求：
-1. 每天安排 {daily_hours} 小时的学习，把总时长按1-2小时为单位切分为具体时段
-2. 时段数量不固定：{daily_hours}小时可切为 {"1-2" if daily_hours <= 3 else "2-3" if daily_hours <= 6 else "3-4"} 个时段，每个时段标注精确起止时间
-3. 不同课程的时段交错安排，避免同一门课连续超过2小时
-4. 每项任务的 suggested_hours 要在0.5-2.5之间，各时段 suggested_hours 之和约等于 {daily_hours}
-5. 每{max(3, total_days//4)}天安排一次综合回顾，重点复习薄弱环节
-6. 最后2天作为综合模拟+查漏补缺
-
-请严格按照JSON格式输出。"""},
+1. 每门课每天1-2个时段，每时段1-2小时，交错安排
+2. title 带章节号（如"§2.1 导数概念"），description 步骤化+时间标注
+3. 各时段 suggested_hours 之和≈{daily_hours}
+4. 阶段递进，最后2天综合冲刺
+5. 输出纯JSON"""},
         ]
 
-        response = self._call_llm(messages, temperature=0.4, max_tokens=8192, ai_config=ai_config)
+        response = self._call_llm(messages, temperature=0.3, max_tokens=4096, ai_config=ai_config)
         if not response:
             return None
 
         return self._parse_llm_multi_course_plan(response)
 
     def _get_multi_course_planning_system_prompt(self):
-        return """你是一个专业的教务排课专家和学习规划师。你的任务是为多门课程制定详细的每日学习课表。
+        return """你是教务排课专家。为多门课程制定极度详细的并行日课表。
 
-核心原则：
-1. **按小时灵活划分时段**：根据每天的总学习时长，将其切分为1-2小时为单位的时段，每个时段标注精确起止时间（如"8:00-9:30"、"14:00-16:00"）
-2. **课程轮换**：不同课程交错安排，同一门课不宜连续超过2小时
-3. **难度穿插**：将难度高的课程安排在精力充沛的时间段，相对轻松的安排在后续时段
-4. **定期回顾**：每天最后安排15-30分钟回顾整理，每周安排综合回顾日
-5. **阶段递进**：前期打基础，中期强化练习，后期模拟冲刺
+要求：
+1. title 必须包含章节号+知识点名称（如"§2.1 导数概念与几何意义"）
+2. description 必须步骤化：每步标注具体教材页数/课件讲次/习题题号+耗时分钟数
+3. 每天时段切为1-2小时单位，不同课程交错，同一门课连续≤2小时
+4. 阶段递进：基础→强化→冲刺，最后2天综合+查漏补缺
+5. suggested_hours 精确到0.5，与时段时间一致
+6. 每天最后安排15-30分钟回顾
 
-每天时段数 = ceil(总小时数 / 1.5)，例如：
-- 2小时/天 → 1-2个时段（如"8:00-9:30" + "9:30-10:00"回顾）
-- 4小时/天 → 2-3个时段（如"8:00-9:30" + "10:00-11:30" + "14:00-15:00"）
-- 6小时/天 → 3-4个时段
-- 8小时/天 → 4-5个时段
-
-输出严格的JSON格式，不要包含任何多余文字：
+输出纯JSON，不要任何额外文字：
 
 ```json
 {
-  "plan_summary": "多课程并行学习计划总览",
-  "daily_schedule": [
-    {
-      "day": 1,
-      "time_slots": [
-        {
-          "time": "8:00-9:30",
-          "course": "高等数学",
-          "phase_tag": "基础夯实",
-          "title": "极限定义与运算法则复习",
-          "description": "先花30分钟回顾极限的ε-δ定义和运算法则，然后完成课后习题2.1-2.5，重点理解极限存在的充要条件",
-          "suggested_hours": 1.5
-        },
-        {
-          "time": "10:00-11:00",
-          "course": "大学英语",
-          "phase_tag": "基础夯实",
-          "title": "词汇Unit1-3复习",
-          "description": "先花20分钟快速过Unit1-3单词表，标记生词；然后用40分钟完成2篇阅读理解真题",
-          "suggested_hours": 1.0
-        },
-        {
-          "time": "21:00-21:30",
-          "course": "综合",
-          "phase_tag": "日常回顾",
-          "title": "当日错题整理与知识点回顾",
-          "description": "整理今天所有课程中的错题和难点，在错题本上记录错误原因和正确解法",
-          "suggested_hours": 0.5
-        }
-      ]
-    }
-  ]
+  "plan_summary": "一句话",
+  "daily_schedule": [{
+    "day": 1,
+    "time_slots": [{
+      "time": "8:00-9:30",
+      "course": "高等数学",
+      "phase_tag": "基础夯实",
+      "title": "§2.1 导数的概念与几何意义",
+      "description": "1.阅读教材P45-P52(30分钟)→2.做习题2.1第1-5题(40分钟)→3.整理导数公式笔记(20分钟)",
+      "suggested_hours": 1.5
+    }]
+  }]
 }
-```
-
-注意：
-- daily_schedule 必须覆盖每一天（day 从 1 到 总天数）
-- 每天所有 time_slots 的 suggested_hours 之和应等于每日总学习时长
-- 每个 time_slot 必须包含 course（课程名）、title（具体任务）、description（详细操作指南）
-- phase_tag 用于标记阶段：基础夯实、强化提升、冲刺模拟、综合回顾、查缺补漏
-- time 字段只需写时间如"8:00-10:00"，不需要加"上午/下午/晚上"前缀"""
+```"""
 
     def _parse_llm_multi_course_plan(self, response):
         """解析 LLM 返回的多课程日课表 JSON"""
