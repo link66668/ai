@@ -25,75 +25,6 @@ class RetrievalService:
         """计算 token 数量（委托给共享计数器）"""
         return self._tc.count(text)
 
-    # ==================== 重排序 ====================
-
-    def _rerank_if_configured(self, results, query, ai_config):
-        """
-        如果配置了 rerank 模型，对检索结果进行重排序
-
-        使用 Cohere 兼容的 Rerank API（如 Cohere、Jina、Mixedbread 等）。
-        通过直接 HTTP 调用，避免依赖 OpenAI 客户端的 rerank 接口。
-        """
-        if not results or not ai_config:
-            return results
-
-        rerank_url = (ai_config.get('rerank_api_url') or '').strip()
-        rerank_key = (ai_config.get('rerank_api_key') or '').strip()
-        rerank_model = (ai_config.get('rerank_model') or '').strip()
-
-        if not (rerank_url and rerank_key and rerank_model):
-            return results
-
-        import httpx
-
-        documents = [r.get('content', '') for r in results if r.get('content')]
-        if not documents:
-            return results
-
-        try:
-            with httpx.Client(timeout=30.0) as client:
-                response = client.post(
-                    rerank_url.rstrip('/') + '/rerank',
-                    headers={
-                        'Authorization': f'Bearer {rerank_key}',
-                        'Content-Type': 'application/json',
-                    },
-                    json={
-                        'model': rerank_model,
-                        'query': query,
-                        'documents': documents,
-                        'top_n': len(documents),
-                    },
-                )
-                response.raise_for_status()
-                data = response.json()
-
-            # Cohere 兼容格式：{ results: [{ index: int, relevance_score: float }, ...] }
-            # Jina 兼容格式：{ results: [{ index: int, relevance_score: float }, ...] }
-            raw_results = data.get('results', [])
-            if not raw_results:
-                # 尝试 data.data 格式 (OpenAI-like)
-                raw_results = data.get('data', [])
-
-            reranked = []
-            for r in raw_results:
-                idx = r.get('index', 0)
-                if idx < len(results):
-                    item = dict(results[idx])
-                    item['score'] = round(r.get('relevance_score', r.get('score', 0)), 4)
-                    item['rerank_score'] = item['score']
-                    item['source'] = item.get('source', '') + '+rerank'
-                    reranked.append(item)
-
-            if reranked:
-                logger.info(f"[检索] 重排序完成: {len(reranked)} 条 (model={rerank_model})")
-                return reranked
-
-        except Exception as e:
-            logger.warning(f"[检索] 重排序失败（跳过）: {e}")
-
-        return results
-
     def hybrid_search(self, course_id, query, top_k=10, metadata_filter=None, ai_config=None):
         """
         混合检索 — 有嵌入模型时走向量+BM25 RRF融合，否则纯BM25
@@ -137,9 +68,6 @@ class RetrievalService:
             results = vector_results[:top_k]
         else:
             results = bm25_results
-
-        # 可选重排序（如果配置了 rerank 模型）
-        results = self._rerank_if_configured(results, query, ai_config)
 
         return results[:top_k]
 

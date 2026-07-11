@@ -53,12 +53,6 @@ class Config:
     TOKEN_RATE = int(os.environ.get('TOKEN_RATE', '40'))          # 流式速率 (tokens/秒)
     MAX_CONTEXT_TOKENS = int(os.environ.get('MAX_CONTEXT_TOKENS', '6000'))
 
-    # 重排序（Rerank）配置 — 在混合检索后对结果按相关性重排（可选）
-    # 使用兼容 OpenAI Rerank API 的服务（如 Cohere, Jina, 或兼容端点）
-    RERANK_API_URL = os.environ.get('RERANK_API_URL', '')
-    RERANK_API_KEY = os.environ.get('RERANK_API_KEY', '')
-    RERANK_MODEL = os.environ.get('RERANK_MODEL', '')
-
     # 处理配置
     MAX_PROCESSING_WORKERS = int(os.environ.get('MAX_PROCESSING_WORKERS', '2'))
     PROCESSING_RETRY_COUNT = int(os.environ.get('PROCESSING_RETRY_COUNT', '3'))
