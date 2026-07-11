@@ -36,34 +36,71 @@
             --review: #9ca3af; --review-bg: #f3f4f6;
         }
 
+        /* ===== 顶部栏 ===== */
+        .topbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 18px; }
+        .topbar h1 { margin: 0; font-size: 22px; }
+        .topbar-left { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+        .topbar-stats { display: flex; gap: 8px; }
+        .stat-pill {
+            display: flex; align-items: center; gap: 3px; padding: 3px 10px;
+            border-radius: 20px; font-size: 12px; font-weight: 500; border: 1px solid transparent;
+        }
+        .stat-pill b { font-weight: 700; }
+        .stat-pending { background: #fef3c7; color: #92400e; border-color: #fde68a; }
+        .stat-active { background: #eef2ff; color: #3730a3; border-color: #c7d2fe; }
+        .stat-done { background: #ecfdf5; color: #065f46; border-color: #a7f3d0; }
+
         /* ===== 智能拆解面板 ===== */
         .decompose-panel {
-            background: linear-gradient(135deg, #f0f4ff 0%, #ffffff 40%, #faf5ff 100%);
-            border: 2px dashed var(--primary);
-            border-radius: var(--radius);
+            background: #fff;
+            border: 1px solid var(--gray-200);
+            border-radius: 14px;
             margin-bottom: 20px;
             overflow: hidden;
             transition: all .3s;
+            box-shadow: var(--shadow);
         }
         .decompose-panel.collapsed .dp-body { display: none; }
         .dp-header {
             display: flex; align-items: center; justify-content: space-between;
-            padding: 14px 20px; cursor: pointer; user-select: none;
+            padding: 16px 22px; cursor: pointer; user-select: none;
+            background: linear-gradient(135deg, #faf5ff 0%, #f0f4ff 100%);
+            border-bottom: 1px solid #e0e7ff;
         }
-        .dp-header h2 { margin: 0; font-size: 16px; display: flex; align-items: center; gap: 8px; }
-        .dp-toggle { font-size: 12px; color: var(--gray-400); transition: transform .3s; }
+        .dp-header:hover { background: linear-gradient(135deg, #f5f0ff 0%, #eef2ff 100%); }
+        .dp-header h2 { margin: 0; font-size: 15px; font-weight: 700; display: flex; align-items: center; gap: 8px; color: #3730a3; }
+        .dp-toggle {
+            font-size: 12px; color: var(--gray-400); transition: transform .3s;
+            width: 24px; height: 24px; border-radius: 50%; background: #fff;
+            display: flex; align-items: center; justify-content: center;
+            border: 1px solid var(--gray-200); line-height: 1;
+        }
         .decompose-panel.collapsed .dp-toggle { transform: rotate(-90deg); }
-        .dp-body { padding: 0 20px 20px; }
+        .dp-body { padding: 18px 22px 22px; }
         .dp-input-row { display: flex; gap: 10px; align-items: stretch; flex-wrap: wrap; }
         .dp-input-row textarea {
-            flex: 1; min-width: 260px; padding: 10px 14px; border: 1px solid var(--gray-300);
-            border-radius: 8px; font-size: 14px; resize: vertical; min-height: 56px; font-family: inherit;
-            line-height: 1.5; transition: border-color .2s;
+            flex: 1; min-width: 260px; padding: 12px 16px; border: 1px solid var(--gray-200);
+            border-radius: 10px; font-size: 14px; resize: vertical; min-height: 60px; font-family: inherit;
+            line-height: 1.6; transition: all .2s; background: var(--gray-50);
         }
-        .dp-input-row textarea:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(79,70,229,.1); }
-        .dp-input-row select { padding: 0 12px; border: 1px solid var(--gray-300); border-radius: 8px; font-size: 14px; min-width: 130px; }
-        .dp-input-row .btn-decompose { padding: 0 20px; white-space: nowrap; font-weight: 600; }
-        .dp-hint { font-size: 12px; color: var(--gray-400); margin-top: 6px; display: flex; gap: 16px; flex-wrap: wrap; }
+        .dp-input-row textarea:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(79,70,229,.08); background: #fff; }
+        .dp-input-row select { padding: 0 14px; border: 1px solid var(--gray-200); border-radius: 10px; font-size: 14px; min-width: 140px; background: var(--gray-50); color: var(--gray-700); }
+        .dp-input-row .btn-decompose { padding: 0 24px; white-space: nowrap; font-weight: 600; border-radius: 10px; font-size: 14px; }
+        .dp-hours-box {
+            display: flex; align-items: center; gap: 4px;
+            background: var(--gray-50); border: 1px solid var(--gray-200); border-radius: 10px;
+            padding: 0 12px; flex-shrink: 0;
+        }
+        .dp-hours-label { font-size: 11px; color: var(--gray-400); white-space: nowrap; }
+        .dp-hours-box input[type="number"] {
+            width: 44px; border: none; font-size: 18px; font-weight: 700;
+            color: var(--primary); text-align: center; padding: 0; outline: none;
+            font-family: inherit; -moz-appearance: textfield; background: transparent;
+        }
+        .dp-hours-box input[type="number"]::-webkit-inner-spin-button,
+        .dp-hours-box input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; }
+        .dp-hours-box span { font-size: 12px; color: var(--gray-500); }
+        .dp-hint { font-size: 12px; color: var(--gray-400); margin-top: 8px; display: flex; gap: 20px; flex-wrap: wrap; }
         .dp-hint span { display: flex; align-items: center; gap: 4px; }
 
         /* ===== 拆解结果 - 日课表 ===== */
@@ -71,9 +108,10 @@
         .dp-result.active { display: block; }
         .dp-result-header {
             display: flex; justify-content: space-between; align-items: center;
-            padding: 12px 16px; background: var(--primary-light); border-radius: 8px; margin-bottom: 12px;
+            padding: 14px 18px; background: linear-gradient(135deg, #eef2ff, #faf5ff);
+            border-radius: 10px; margin-bottom: 14px; border: 1px solid #e0e7ff;
         }
-        .dp-result-header h3 { margin: 0; font-size: 15px; }
+        .dp-result-header h3 { margin: 0; font-size: 14px; font-weight: 700; color: #3730a3; }
         .dp-result-meta { font-size: 12px; color: var(--gray-500); display: flex; gap: 12px; }
         .dp-result-meta span { display: flex; align-items: center; gap: 4px; }
 
@@ -114,15 +152,16 @@
         .simple-task-list .task-item { padding: 6px 14px; border-bottom: 1px solid var(--gray-100); font-size: 13px; display: flex; align-items: center; gap: 10px; }
         .simple-task-list .task-num { color: var(--primary); font-weight: 600; min-width: 36px; font-size: 12px; }
 
-        .dp-actions { display: flex; gap: 10px; margin-top: 16px; }
-        .dp-loading { text-align: center; padding: 30px; display: none; }
+        .dp-actions { display: flex; gap: 10px; margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--gray-100); }
+        .dp-loading { text-align: center; padding: 36px 20px; display: none; }
         .dp-loading.active { display: block; }
 
         /* ===== 批量操作栏 ===== */
         .batch-bar {
-            display: none; align-items: center; gap: 8px; padding: 8px 16px;
-            background: var(--primary-light); border-radius: 8px; margin-bottom: 8px;
-            animation: batchSlideIn .2s ease;
+            display: none; align-items: center; gap: 10px; padding: 10px 18px;
+            background: linear-gradient(135deg, #eef2ff, #faf5ff); border-radius: 10px;
+            margin-bottom: 10px; border: 1px solid #c7d2fe;
+            animation: batchSlideIn .25s ease;
         }
         @keyframes batchSlideIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
         .batch-bar.active { display: flex; }
@@ -136,15 +175,16 @@
         .btn-xs-ghost:hover { background: var(--gray-100); }
 
         /* ===== 选择行 ===== */
-        .select-row { display: flex; align-items: center; gap: 8px; padding: 4px 4px 8px; font-size: 12px; color: var(--gray-500); cursor: pointer; user-select: none; }
-        .select-row input { width: 15px; height: 15px; accent-color: var(--primary); cursor: pointer; }
+        .select-row { display: flex; align-items: center; gap: 10px; padding: 8px 16px; font-size: 13px; color: var(--gray-500); cursor: pointer; user-select: none; background: var(--gray-50); border-bottom: 1px solid var(--gray-100); }
+        .select-row:hover { background: #eef2ff; }
+        .select-row input { width: 16px; height: 16px; accent-color: var(--primary); cursor: pointer; }
 
         /* ===== 任务列表 ===== */
         .task-list { list-style: none; padding: 0; margin: 0; }
-        .task-row { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--gray-100); transition: background .15s; }
-        .task-row:hover { background: var(--gray-50); }
+        .task-row { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--gray-100); transition: background .2s; }
+        .task-row:hover { background: #fafaff; }
         .task-row:last-child { border-bottom: none; }
-        .task-row.completed { opacity: .6; }
+        .task-row.completed { opacity: .55; }
         .task-row.completed .task-row-title { text-decoration: line-through; color: var(--gray-400); }
         .task-check { flex-shrink: 0; display: flex; }
         .task-check input { width: 15px; height: 15px; accent-color: var(--primary); cursor: pointer; margin: 0; }
@@ -172,27 +212,38 @@
         .btn-icon-success:hover { border-color: var(--success); color: var(--success); }
 
         /* ===== 筛选栏 ===== */
-        .filter-bar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
-        .filter-bar select { padding: 6px 10px; border: 1px solid var(--gray-300); border-radius: 6px; font-size: 13px; background: #fff; }
+        .filter-bar {
+            display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+            margin-bottom: 12px; padding: 10px 16px;
+            background: #fff; border: 1px solid var(--gray-200);
+            border-radius: 10px; box-shadow: var(--shadow);
+        }
+        .filter-bar select {
+            padding: 7px 12px; border: 1px solid var(--gray-200); border-radius: 8px;
+            font-size: 13px; background: var(--gray-50); color: var(--gray-700);
+        }
         .filter-bar .spacer { flex: 1; }
-        .filter-summary { font-size: 12px; color: var(--gray-400); }
+        .filter-summary { font-size: 12px; color: var(--gray-400); font-weight: 500; }
 
         /* ===== 空状态 ===== */
-        .empty-state { text-align: center; padding: 40px 20px; }
-        .empty-state .icon { font-size: 40px; margin-bottom: 12px; }
-        .empty-state h3 { margin: 0 0 4px; font-size: 16px; color: var(--gray-700); }
-        .empty-state p { margin: 0; font-size: 13px; color: var(--gray-400); }
+        .empty-state { text-align: center; padding: 48px 24px; }
+        .empty-state .icon { font-size: 48px; margin-bottom: 16px; }
+        .empty-state h3 { margin: 0 0 6px; font-size: 17px; color: var(--gray-700); font-weight: 600; }
+        .empty-state p { margin: 0; font-size: 14px; color: var(--gray-400); }
 
         /* ===== 加载 ===== */
         .spinner-sm { width: 20px; height: 20px; border: 2px solid var(--gray-200); border-top-color: var(--primary); border-radius: 50%; animation: spin .6s linear infinite; margin: 0 auto; }
         @keyframes spin { to { transform: rotate(360deg); } }
 
+        /* ===== 任务容器卡片 ===== */
+        .task-main-card { border: none !important; border-radius: 14px !important; overflow: hidden; box-shadow: var(--shadow-md); }
+
         /* ===== 周课表格视图 ===== */
-        .view-toggle { display: flex; gap: 0; border: 1px solid var(--gray-300); border-radius: 6px; overflow: hidden; }
-        .view-toggle button { padding: 5px 12px; font-size: 12px; border: none; background: #fff; color: var(--gray-500); cursor: pointer; transition: all .15s; }
-        .view-toggle button.active { background: var(--primary); color: #fff; }
-        .view-toggle button:hover:not(.active) { background: var(--gray-50); }
-        .tg-grid { display: none; gap: 0; border: 1px solid var(--gray-200); border-radius: 10px; overflow-x: auto; background: #fff; box-shadow: var(--shadow); }
+        .view-toggle { display: flex; gap: 0; border: 1px solid var(--gray-200); border-radius: 8px; overflow: hidden; background: var(--gray-50); }
+        .view-toggle button { padding: 7px 14px; font-size: 12px; border: none; background: transparent; color: var(--gray-500); cursor: pointer; transition: all .2s; font-weight: 500; }
+        .view-toggle button.active { background: var(--primary); color: #fff; box-shadow: 0 2px 4px rgba(79,70,229,.3); }
+        .view-toggle button:hover:not(.active) { color: var(--primary); }
+        .tg-grid { display: none; gap: 0; border: 1px solid var(--gray-200); border-radius: 12px; overflow-x: auto; background: #fff; box-shadow: var(--shadow); }
         .tg-grid.active { display: grid; }
         .tg-corner { background: var(--gray-50); padding: 21px 15px; font-size: 21px; color: var(--gray-600); text-align: center; font-weight: 700; border-right: 1px solid var(--gray-200); border-bottom: 1px solid var(--gray-200); }
         .tg-day-header { background: var(--gray-50); padding: 18px 12px; text-align: center; border-right: 1px solid var(--gray-200); border-bottom: 1px solid var(--gray-200); }
@@ -220,15 +271,222 @@
         .tg-view-legend { font-size: 17px; color: var(--gray-400); display: flex; gap: 14px; margin-bottom: 10px; align-items: center; }
         .tg-view-legend span { display: flex; align-items: center; gap: 4px; }
         .tg-view-legend .chip-demo { display: inline-block; width: 18px; height: 18px; border-radius: 3px; }
-        .week-pager { display: flex; align-items: center; gap: 15px; margin-bottom: 15px; }
-        .week-pager .pager-btn { padding: 6px 18px; font-size: 18px; border: 2px solid var(--gray-300); border-radius: 8px; background: #fff; color: var(--gray-700); cursor: pointer; transition: all .15s; }
-        .week-pager .pager-btn:hover { border-color: var(--primary); color: var(--primary); }
+        .week-pager { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+        .week-pager .pager-btn { padding: 8px 18px; font-size: 17px; border: 1px solid var(--gray-200); border-radius: 8px; background: #fff; color: var(--gray-600); cursor: pointer; transition: all .15s; }
+        .week-pager .pager-btn:hover { border-color: var(--primary); color: var(--primary); background: #faf5ff; }
         .week-pager .pager-btn:disabled { opacity: .4; cursor: not-allowed; }
-        .week-pager .pager-btn.today-btn { font-weight: 600; border-color: var(--primary); color: var(--primary); }
-        .week-pager .week-label { font-size: 21px; font-weight: 600; color: var(--gray-700); min-width: 300px; text-align: center; }
+        .week-pager .pager-btn.today-btn { font-weight: 600; border-color: var(--primary); color: var(--primary); background: #eef2ff; }
+        .week-pager .week-label { font-size: 20px; font-weight: 600; color: var(--gray-700); min-width: 280px; text-align: center; }
         .week-hint { font-size: 17px; color: var(--gray-400); text-align: center; margin-top: 15px; }
-        .select-row { display: flex; align-items: center; gap: 12px; padding: 6px 8px 12px; font-size: 18px; color: var(--gray-500); cursor: pointer; user-select: none; }
-        .select-row input { width: 23px; height: 23px; accent-color: var(--primary); cursor: pointer; }
+        .select-row-input { width: 23px; height: 23px; accent-color: var(--primary); cursor: pointer; }
+
+        /* ===== 学习路线图时间线 ===== */
+        .roadmap-wrapper {
+            padding: 4px 0;
+            position: relative;
+        }
+        .roadmap-progress-bar {
+            display: flex; align-items: center; gap: 12px; margin-bottom: 28px;
+            padding: 18px 22px; background: linear-gradient(135deg, #eef2ff, #faf5ff);
+            border-radius: 14px; border: 1px solid #e0e7ff; box-shadow: var(--shadow);
+        }
+        .roadmap-progress-bar .prog-label {
+            font-size: 14px; font-weight: 600; color: var(--gray-600); white-space: nowrap;
+        }
+        .roadmap-progress-bar .prog-track {
+            flex: 1; height: 8px; background: #e5e7eb; border-radius: 4px; overflow: hidden; position: relative;
+        }
+        .roadmap-progress-bar .prog-fill {
+            height: 100%; background: linear-gradient(90deg, #818cf8, #c084fc); border-radius: 4px;
+            transition: width .6s cubic-bezier(.4,0,.2,1); position: relative;
+        }
+        .roadmap-progress-bar .prog-fill::after {
+            content: ''; position: absolute; right: 0; top: -2px;
+            width: 12px; height: 12px; background: #c084fc; border-radius: 50%;
+            box-shadow: 0 0 8px rgba(192,132,252,.5);
+        }
+        .roadmap-progress-bar .prog-pct {
+            font-size: 13px; font-weight: 700; color: var(--primary); white-space: nowrap;
+        }
+        .roadmap-timeline {
+            position: relative; padding-left: 36px;
+        }
+        .roadmap-timeline::before {
+            content: ''; position: absolute; left: 15px; top: 0; bottom: 0;
+            width: 2px; background: linear-gradient(180deg, var(--primary) 0%, #c084fc 50%, #f0abfc 100%);
+            border-radius: 1px;
+        }
+        .roadmap-phase-marker {
+            position: relative;
+            margin-bottom: 8px;
+        }
+        .roadmap-phase-marker .phase-node {
+            position: absolute; left: -28px; top: 16px;
+            width: 28px; height: 28px; border-radius: 50%;
+            background: linear-gradient(135deg, #4f46e5, #7c3aed);
+            color: #fff; display: flex; align-items: center; justify-content: center;
+            font-size: 13px; font-weight: 700;
+            box-shadow: 0 0 0 4px rgba(79,70,229,.15), 0 2px 8px rgba(79,70,229,.3);
+            z-index: 2;
+        }
+        .roadmap-phase-marker:first-child .phase-node {
+            background: linear-gradient(135deg, #10b981, #059669);
+            box-shadow: 0 0 0 4px rgba(16,185,129,.15), 0 2px 8px rgba(16,185,129,.3);
+        }
+        .roadmap-phase-card {
+            background: #fff;
+            border: 1px solid var(--gray-200); border-radius: 12px;
+            padding: 14px 18px; margin-bottom: 14px;
+            box-shadow: var(--shadow);
+        }
+        .roadmap-phase-card .phase-name {
+            font-size: 14px; font-weight: 700; color: #4f46e5;
+            display: flex; align-items: center; gap: 8px;
+        }
+        .roadmap-phase-card .phase-focus {
+            font-size: 12px; color: var(--gray-500); margin-top: 2px;
+        }
+        .roadmap-phase-card .phase-range {
+            font-size: 11px; color: var(--gray-400);
+        }
+        .roadmap-day-card {
+            position: relative; margin-bottom: 6px; padding-left: 0;
+            transition: transform .25s cubic-bezier(.4,0,.2,1), opacity .25s;
+        }
+        .roadmap-day-card:hover { transform: translateX(5px); }
+        .roadmap-day-card .day-dot {
+            position: absolute; left: -22px; top: 14px;
+            width: 16px; height: 16px; border-radius: 50%;
+            background: #fff; border: 2px solid var(--gray-300);
+            z-index: 2; transition: all .25s;
+        }
+        .roadmap-day-card.today .day-dot {
+            border-color: var(--warning); background: #fef3c7;
+            box-shadow: 0 0 0 5px rgba(245,158,11,.12);
+            animation: dotPulse 2s ease-in-out infinite;
+        }
+        .roadmap-day-card.completed .day-dot {
+            border-color: var(--success); background: var(--success);
+        }
+        @keyframes dotPulse {
+            0%, 100% { box-shadow: 0 0 0 5px rgba(245,158,11,.12); }
+            50% { box-shadow: 0 0 0 10px rgba(245,158,11,.05); }
+        }
+        .roadmap-day-card .day-inner {
+            background: #fff; border: 1px solid var(--gray-200);
+            border-radius: 8px; padding: 12px 14px;
+            display: flex; align-items: flex-start; gap: 12px;
+            transition: border-color .2s, box-shadow .2s;
+            cursor: pointer;
+        }
+        .roadmap-day-card:hover .day-inner {
+            border-color: var(--primary); box-shadow: var(--shadow-md);
+        }
+        .roadmap-day-card.today .day-inner {
+            border-color: var(--warning);
+            background: linear-gradient(135deg, #fffbeb, #fff);
+            box-shadow: 0 2px 12px rgba(245,158,11,.1);
+        }
+        .roadmap-day-card.completed .day-inner {
+            opacity: .65; border-color: #d1fae5;
+            background: linear-gradient(135deg, #f0fdf4, #fff);
+        }
+        .roadmap-day-card .day-badge-num {
+            min-width: 44px; height: auto; min-height: 36px; border-radius: 8px;
+            background: linear-gradient(135deg, #eef2ff, #e0e7ff);
+            color: var(--primary); display: flex; flex-direction: column; align-items: center; justify-content: center;
+            font-size: 13px; font-weight: 700; flex-shrink: 0; padding: 4px 8px; gap: 1px;
+        }
+        .roadmap-day-card .day-badge-date {
+            font-size: 9px; font-weight: 500; opacity: .7; white-space: nowrap;
+        }
+        .roadmap-day-card.today .day-badge-num {
+            background: linear-gradient(135deg, #fef3c7, #fde68a);
+            color: #92400e;
+        }
+        .roadmap-day-card.completed .day-badge-num {
+            background: #d1fae5; color: #065f46;
+        }
+        .roadmap-day-card .day-body { flex: 1; min-width: 0; }
+        .roadmap-day-card .day-title {
+            font-size: 14px; font-weight: 600; color: var(--gray-700);
+            line-height: 1.4; margin-bottom: 2px;
+        }
+        .roadmap-day-card .day-meta {
+            font-size: 11px; color: var(--gray-400); display: flex; gap: 12px; flex-wrap: wrap;
+        }
+        .roadmap-day-card .day-meta span { display: flex; align-items: center; gap: 3px; }
+        .roadmap-day-card .day-action {
+            width: 32px; height: 32px; border-radius: 50%;
+            border: 2px solid var(--gray-200); background: #fff;
+            color: var(--gray-400); cursor: pointer; display: flex; align-items: center; justify-content: center;
+            font-size: 14px; transition: all .2s; flex-shrink: 0;
+        }
+        .roadmap-day-card .day-action:hover {
+            border-color: var(--success); color: var(--success);
+            background: #f0fdf4; transform: scale(1.1);
+        }
+        .roadmap-day-card.completed .day-action {
+            border-color: var(--success); color: var(--success); background: #d1fae5;
+        }
+        .roadmap-empty-state {
+            text-align: center; padding: 40px 20px; color: var(--gray-400);
+        }
+        .roadmap-empty-state .empty-icon { font-size: 40px; margin-bottom: 12px; }
+
+        /* 超时警告横幅 */
+        .roadmap-overload-banner {
+            display: flex; align-items: flex-start; gap: 10px;
+            background: linear-gradient(135deg, #fef2f2, #fff5f5);
+            border: 1px solid #fecaca; border-radius: 10px;
+            padding: 14px 18px; margin-bottom: 16px;
+            font-size: 13px; color: #991b1b; line-height: 1.5;
+        }
+        .roadmap-overload-banner .overload-icon { font-size: 20px; flex-shrink: 0; margin-top: 1px; }
+        .roadmap-overload-banner .overload-days { font-weight: 600; }
+        .roadmap-overload-banner .overload-actions { margin-top: 8px; display: flex; gap: 8px; }
+        .roadmap-overload-banner .overload-actions button {
+            padding: 4px 12px; border-radius: 6px; border: 1px solid #fca5a5;
+            background: #fff; color: #991b1b; font-size: 12px; cursor: pointer;
+            transition: all .15s;
+        }
+        .roadmap-overload-banner .overload-actions button:hover {
+            background: #fef2f2; border-color: #f87171;
+        }
+
+        /* 超时卡片高亮 */
+        .roadmap-day-card.overloaded .day-inner {
+            border-color: #f87171 !important;
+            background: linear-gradient(135deg, #fef2f2, #fff) !important;
+            box-shadow: 0 2px 8px rgba(239,68,68,.12);
+        }
+        .roadmap-day-card.overloaded .day-badge-num {
+            background: linear-gradient(135deg, #fef2f2, #fee2e2) !important;
+            color: #991b1b !important;
+        }
+        .roadmap-day-card.overloaded .day-dot {
+            border-color: #ef4444; background: #fef2f2;
+            box-shadow: 0 0 0 5px rgba(239,68,68,.12);
+        }
+        .roadmap-day-card.today.overloaded .day-inner {
+            border-color: #ef4444 !important;
+            background: linear-gradient(135deg, #fef2f2, #fffbeb) !important;
+        }
+        .roadmap-day-hrs-bar {
+            height: 3px; background: #e5e7eb; border-radius: 2px; margin-top: 6px; overflow: hidden;
+        }
+        .roadmap-day-hrs-bar .hrs-fill {
+            height: 100%; border-radius: 2px; transition: width .4s;
+        }
+        .roadmap-day-hrs-bar .hrs-fill.normal { background: linear-gradient(90deg, #818cf8, #a78bfa); }
+        .roadmap-day-hrs-bar .hrs-fill.warning { background: linear-gradient(90deg, #f59e0b, #ef4444); }
+        .roadmap-day-hrs-label {
+            font-size: 11px; color: var(--gray-400); margin-top: 2px;
+            display: flex; align-items: center; gap: 4px;
+        }
+        .roadmap-day-hrs-label.over {
+            color: #ef4444; font-weight: 600;
+        }
     </style>
 </head>
 <body>
@@ -253,7 +511,14 @@
         <!-- 主内容 -->
         <main class="main-content">
             <div class="topbar">
-                <h1>✅ 任务管理</h1>
+                <div class="topbar-left">
+                    <h1>✅ 任务管理</h1>
+                    <div class="topbar-stats" id="topbarStats">
+                        <span class="stat-pill stat-pending">⏳ <b id="statPending">0</b> 待办</span>
+                        <span class="stat-pill stat-active">🔄 <b id="statActive">0</b> 进行中</span>
+                        <span class="stat-pill stat-done">✅ <b id="statDone">0</b> 已完成</span>
+                    </div>
+                </div>
                 <div class="topbar-actions">
                     <button class="btn btn-primary" onclick="showCreateModal()">+ 新建任务</button>
                 </div>
@@ -268,6 +533,11 @@
                 <div class="dp-body">
                     <div class="dp-input-row">
                         <textarea id="sdGoalInput" placeholder="描述你的学习目标，系统自动拆解&#10;例如：两周复习完高等数学期末考试&#10;例如：两周内复习完高等数学和大学英语&#10;例如：一个月学完 Python 和数据结构，每天 3 小时"></textarea>
+                        <div class="dp-hours-box">
+                            <label class="dp-hours-label">每日</label>
+                            <input type="number" id="sdDailyHours" value="2" min="0.5" max="12" step="0.5" title="每天可用学习时间（小时）">
+                            <span>小时</span>
+                        </div>
                         <select id="sdCourseSelect"><option value="">自动匹配课程</option></select>
                         <button class="btn btn-primary btn-decompose" onclick="smartDecompose()" id="sdBtn">🔍 拆解</button>
                     </div>
@@ -318,7 +588,8 @@
                 </select>
                 <div class="spacer"></div>
                 <div class="view-toggle">
-                    <button class="active" id="viewBtnTable" onclick="switchView('table')">📅 课表</button>
+                    <button class="active" id="viewBtnRoadmap" onclick="switchView('roadmap')">🗺 路线图</button>
+                    <button id="viewBtnTable" onclick="switchView('table')">📅 课表</button>
                     <button id="viewBtnList" onclick="switchView('list')">📋 列表</button>
                 </div>
                 <span class="filter-summary" id="taskSummary">共 0 个任务</span>
@@ -333,7 +604,7 @@
             </div>
 
             <!-- ========== 4️⃣ 任务列表 ========== -->
-            <div class="card">
+            <div class="card task-main-card">
                 <div class="card-body" style="padding:0;">
                     <div id="taskListContainer">
                         <div class="loading"><div class="spinner"></div></div>
@@ -406,7 +677,7 @@
         let allTasks = [], courses = [];
         let decomposeResult = null;
         let selectedTasks = new Set();
-        let currentView = 'table';
+        let currentView = 'roadmap';
         let dragTaskId = null;
         let weekOffset = 0;
 
@@ -448,14 +719,21 @@
 
             try {
                 const totalDays = parseNLDuration(goalText) || 14;
+                const dailyHours = parseFloat(document.getElementById('sdDailyHours').value) || 2.0;
                 const resp = await api.post('/agent/decompose-task', {
-                    title: goalText, description: '', total_days: totalDays
+                    title: goalText, description: '', total_days: totalDays, daily_hours: dailyHours
                 });
 
                 const subtasks = resp.data?.subtasks || resp.subtasks || [];
                 if (!subtasks.length) { showToast('未能拆解出任务，请尝试更明确的目标描述', 'warning'); return; }
 
-                decomposeResult = { goal: goalText, subtasks, totalDays };
+                decomposeResult = { goal: goalText, subtasks, totalDays, dailyHours };
+                // Save dailyHours to API response level and localStorage
+                if (resp.data?.daily_hours) {
+                    localStorage.setItem('roadmap_daily_hours', resp.data.daily_hours);
+                } else {
+                    localStorage.setItem('roadmap_daily_hours', dailyHours);
+                }
                 renderDecomposeResult();
             } catch (error) {
                 showToast('拆解失败：' + (error.message || '服务异常'), 'error');
@@ -467,7 +745,7 @@
 
         function renderDecomposeResult() {
             if (!decomposeResult) return;
-            const { subtasks, goal, totalDays } = decomposeResult;
+            const { subtasks, goal, totalDays, dailyHours } = decomposeResult;
 
             const phaseTasks = subtasks.filter(t => t.is_phase_header);
             const dailyTasks = subtasks.filter(t => t.is_daily_task);
@@ -477,6 +755,7 @@
                 <span>📊 ${phaseTasks.length} 阶段</span>
                 <span>📅 ${dailyTasks.length} 天任务</span>
                 <span>⏱ 共 ${totalDays} 天</span>
+                <span>🕐 每日 ${dailyHours || 2} 小时</span>
             `;
 
             const hasMultiCourse = dailyTasks.some(t => t.course && t.time_slot);
@@ -585,7 +864,7 @@
                 showToast('没有可创建的任务', 'warning'); return;
             }
             const courseId = document.getElementById('sdCourseSelect').value || null;
-            const { goal, subtasks } = decomposeResult;
+            const { goal, subtasks, dailyHours } = decomposeResult;
 
             if (!await confirmDialog(`确定要创建 ${subtasks.length} 个任务吗？`)) return;
 
@@ -593,6 +872,10 @@
             showToast('正在创建任务...', 'info');
 
             try {
+                // 保存每日可用时长到 localStorage
+                if (dailyHours && dailyHours > 0) {
+                    localStorage.setItem('roadmap_daily_hours', dailyHours);
+                }
                 const parent = await api.createTask({
                     title: goal.length > 50 ? goal.slice(0, 47) + '...' : goal,
                     description: `智能拆解 · 共 ${subtasks.length} 个子任务 · 由 DeepSeek 生成`,
@@ -647,20 +930,37 @@
                 const result = await api.getTasks(status, courseId);
                 allTasks = result.data || [];
                 document.getElementById('taskSummary').textContent = `共 ${allTasks.length} 个任务`;
+                updateTopbarStats();
                 renderTaskList();
-            } catch (e) { showToast('加载任务失败', 'error'); }
+            } catch (e) { showToast('加载任务失败', 'error'); updateTopbarStats(); }
+        }
+
+        function updateTopbarStats() {
+            const tasks = allTasks || [];
+            let pending = 0, active = 0, done = 0;
+            tasks.forEach(t => {
+                if (t.status === '已完成' || t.status === 'completed') done++;
+                else if (t.status === '进行中') active++;
+                else pending++;
+            });
+            document.getElementById('statPending').textContent = pending;
+            document.getElementById('statActive').textContent = active;
+            document.getElementById('statDone').textContent = done;
         }
 
         // ========== 任务列表渲染 ==========
         function switchView(view) {
             currentView = view;
+            document.getElementById('viewBtnRoadmap').classList.toggle('active', view === 'roadmap');
             document.getElementById('viewBtnTable').classList.toggle('active', view === 'table');
             document.getElementById('viewBtnList').classList.toggle('active', view === 'list');
             renderTaskList();
         }
 
         function renderTaskList() {
-            if (currentView === 'table') {
+            if (currentView === 'roadmap') {
+                renderRoadmapView();
+            } else if (currentView === 'table') {
                 renderTimetableGrid();
             } else {
                 renderListView();
@@ -687,6 +987,11 @@
             } else {
                 const amPmMatch = title.match(/(上午|下午|晚上)\s*(\d{1,2}:\d{2}[-~—]\d{1,2}:\d{2})/);
                 if (amPmMatch) info.time_slot = amPmMatch[2];
+                else {
+                    // 新格式：直接包含 上午/下午/晚上
+                    const periodMatch = title.match(/(上午|下午|晚上)/);
+                    if (periodMatch) info.time_slot = periodMatch[1];
+                }
             }
 
             if (!info.day && task.due_date) {
@@ -706,6 +1011,8 @@
             s = s.replace(/^第\d+天\s*/, '');
             s = s.replace(/\d{1,2}:\d{2}[-~—]\d{1,2}:\d{2}\s*\|\s*/, '');
             s = s.replace(/\d{1,2}:\d{2}[-~—]\d{1,2}:\d{2}/, '');
+            s = s.replace(/(?:上午|下午|晚上)\s*\|\s*/g, '');
+            s = s.replace(/(?:上午|下午|晚上)\s*/g, '');
             if (course) {
                 const esc = course.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
                 s = s.replace(new RegExp('【' + esc + '】'), '');
@@ -790,20 +1097,20 @@
             const isPastWeek = weekDates[6] < today;
             const isFutureWeek = weekDates[0] > today;
 
-            // 固定整点时段 7:00 ~ 23:00
-            const hourlySlots = [];
-            for (let h = 7; h < 23; h++) {
-                const key = `${String(h).padStart(2, '0')}:00-${String(h + 1).padStart(2, '0')}:00`;
-                hourlySlots.push(key);
-            }
+            // 三大时段：上午/下午/晚上（替代细粒度时间点）
+            const periodSlots = [
+                { key: '上午', label: '☀️ 上午', range: '7:00~12:00' },
+                { key: '下午', label: '🌤 下午', range: '12:00~18:00' },
+                { key: '晚上', label: '🌙 晚上', range: '18:00~23:00' },
+            ];
 
             // 初始化 cells
             const cells = {};
             for (const d of weekDates) {
                 const key = localDateStr(d);
                 cells[key] = { date: d, slots: {} };
-                for (const sk of hourlySlots) {
-                    cells[key].slots[sk] = [];
+                for (const ps of periodSlots) {
+                    cells[key].slots[ps.key] = [];
                 }
             }
 
@@ -812,7 +1119,6 @@
                 const info = parseTaskTimeInfo(task);
                 const taskData = { ...task, ...info };
 
-                // 用 due_date 精确定位，不在当前周内就跳过
                 let dateKey = null;
                 if (task.due_date) {
                     const due = task.due_date.toString().slice(0, 10);
@@ -820,26 +1126,29 @@
                 }
                 if (!dateKey) continue;
 
-                // 确定时段
-                let nearestSlot = hourlySlots[0];
-                if (info.time_slot) {
+                // 确定时段：优先匹配标题中的 上午/下午/晚上
+                let targetPeriod = periodSlots[0].key;
+                const title = (task.title || '').toLowerCase();
+                if (title.includes('上午')) targetPeriod = '上午';
+                else if (title.includes('下午')) targetPeriod = '下午';
+                else if (title.includes('晚上')) targetPeriod = '晚上';
+                else if (info.time_slot) {
                     const slotStart = info.time_slot.match(/(\d{1,2}):/);
                     if (slotStart) {
-                        const startH = parseInt(slotStart[1]);
-                        const match = hourlySlots.find(sk => sk.startsWith(String(startH).padStart(2, '0') + ':'));
-                        if (match) nearestSlot = match;
+                        const h = parseInt(slotStart[1]);
+                        if (h >= 18) targetPeriod = '晚上';
+                        else if (h >= 12) targetPeriod = '下午';
                     }
                 }
 
-                cells[dateKey].slots[nearestSlot].push(taskData);
+                cells[dateKey].slots[targetPeriod].push(taskData);
             }
 
             const showKeys = weekDates.map(d => localDateStr(d));
-            const hasAnyTasks = showKeys.some(k => hourlySlots.some(sk => (cells[k] && cells[k].slots[sk]) ? cells[k].slots[sk].length > 0 : false));
-            const totalSlots = showKeys.reduce((sum, k) => sum + hourlySlots.reduce((s, sk) => s + (cells[k] && cells[k].slots[sk] ? cells[k].slots[sk].length : 0), 0), 0);
+            const hasAnyTasks = showKeys.some(k => periodSlots.some(ps => (cells[k] && cells[k].slots[ps.key]) ? cells[k].slots[ps.key].length > 0 : false));
 
             const gridCols = `120px repeat(7, 1fr)`;
-            const gridRows = `auto repeat(${hourlySlots.length}, minmax(72px, auto))`;
+            const gridRows = `auto repeat(${periodSlots.length}, minmax(100px, auto))`;
 
             let html = '';
             html += `<div class="week-pager">
@@ -850,7 +1159,7 @@
                 <span style="margin-left:auto;font-size:11px;color:var(--gray-400);">已选 <b style="color:var(--primary);">${selectedTasks.size}</b> 个</span>
             </div>`;
 
-            if (!hasAnyTasks && isFutureWeek && totalSlots === 0) {
+            if (!hasAnyTasks && isFutureWeek) {
                 html += `<div class="week-hint">📭 本周暂无任务 · 共 ${allTasks.length} 个任务分布在整个计划中</div>`;
             }
             html += `<div class="tg-grid active" style="grid-template-columns:${gridCols};grid-template-rows:${gridRows};">`;
@@ -866,14 +1175,17 @@
                 </div>`;
             }
 
-            for (const sk of hourlySlots) {
-                html += `<div class="tg-time-label">${sk}</div>`;
+            for (const ps of periodSlots) {
+                html += `<div class="tg-time-label" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;">
+                    <span style="font-size:14px;">${ps.label}</span>
+                    <span style="font-size:10px;color:var(--gray-400);">${ps.range}</span>
+                </div>`;
                 for (const key of showKeys) {
-                    const slotTasks = (cells[key] && cells[key].slots[sk]) || [];
+                    const slotTasks = (cells[key] && cells[key].slots[ps.key]) || [];
                     if (!slotTasks.length) {
-                        html += `<div class="tg-empty-cell" data-date="${key}" data-slot="${sk}" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event, '${key}', '${sk}')"></div>`;
+                        html += `<div class="tg-empty-cell" data-date="${key}" data-slot="${ps.key}" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event, '${key}', '${ps.key}')"></div>`;
                     } else {
-                        html += `<div class="tg-cell" data-date="${key}" data-slot="${sk}" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event, '${key}', '${sk}')">`;
+                        html += `<div class="tg-cell" data-date="${key}" data-slot="${ps.key}" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event, '${key}', '${ps.key}')">`;
                         for (const t of slotTasks) {
                             const c = getCourseColor(t.course);
                             const completed = t.status === '已完成';
@@ -938,10 +1250,19 @@
 
             const oldTitle = task.title || '';
 
+            // 保留原始第N天编号
+            const dayNumMatch = oldTitle.match(/^第(\d+)天/);
+            const dayPrefix = dayNumMatch ? dayNumMatch[0] : '';
+
             let core = oldTitle
+                .replace(/^第\d+天\s*[：:]\s*/, '')
                 .replace(/^第\d+天\s*/, '')
+                // 清理旧时段：时间点格式 + 纯中文时段 + 分隔符
+                .replace(/(?:上午|下午|晚上)\s*\|\s*/g, '')
                 .replace(/\d{1,2}:\d{2}[-~—]\d{1,2}:\d{2}\s*\|\s*/, '')
                 .replace(/\d{1,2}:\d{2}[-~—]\d{1,2}:\d{2}/, '')
+                .replace(/(?:上午|下午|晚上)\s*/g, '')
+                .replace(/^[：:]\s*/, '')
                 .trim();
 
             const courseMatch = core.match(/【(.+?)】\s*/);
@@ -953,15 +1274,17 @@
 
             core = core.trim();
 
-            const dropDate = new Date(dateKey + 'T00:00:00');
-            const monday = getWeekStartMonday(dropDate);
-            const dayNum = Math.round((dropDate - monday) / (1000 * 60 * 60 * 24)) + 1;
+            // slotKey 已是 "上午"/"下午"/"晚上"，直接用
+            const period = (slotKey === '上午' || slotKey === '下午' || slotKey === '晚上') ? slotKey : '上午';
 
-            const newTitle = `第${dayNum}天 ${slotKey} | ${courseTag}${core}`;
+            const newTitle = dayPrefix
+                ? `${dayPrefix} ${period} | ${courseTag}${core}`
+                : `${period} | ${courseTag}${core}`;
+            const cleanedTitle = newTitle.replace(/\s*\|\s*$/, '').replace(/\|\s*$/, '');
 
             try {
-                await api.updateTask(taskId, { title: newTitle, due_date: dateKey });
-                showToast(`已移至 ${dateKey} ${slotKey}`, 'success');
+                await api.updateTask(taskId, { title: cleanedTitle, due_date: dateKey });
+                showToast(`已移至 ${dateKey} ${period}`, 'success');
                 loadTasks();
             } catch (e) {
                 showToast('移动失败: ' + (e.message || '未知错误'), 'error');
@@ -979,6 +1302,203 @@
             }
             updateBatchBar();
             renderTimetableGrid();
+        }
+
+        function renderRoadmapView() {
+            const container = document.getElementById('taskListContainer');
+            if (!allTasks.length) {
+                container.innerHTML = '<div class="roadmap-empty-state"><div class="empty-icon">🗺</div><h3>还没有任务</h3><p>使用上方的智能拆解来创建你的学习路线图</p></div>';
+                return;
+            }
+
+            const phaseTasks = allTasks.filter(t => t.is_phase_header || (t.title && t.title.includes('📋')));
+            const dailyTasks = allTasks.filter(t => !phaseTasks.includes(t));
+            const shownTitles = new Set();
+
+            // 从 localStorage 读取每日可用时长
+            const maxHrsPerDay = parseFloat(localStorage.getItem('roadmap_daily_hours') || '0') || 2.0;
+
+            // 按天汇总任务耗时
+            const dayHoursMap = {};
+            let totalHours = 0;
+            dailyTasks.forEach(t => {
+                const dm = (t.title || '').match(/第\s*(\d+)\s*天/);
+                const nd = dm ? parseInt(dm[1]) : -1;
+                if (nd < 1) return;
+                const hrs = extractTaskHours(t);
+                if (!dayHoursMap[nd]) dayHoursMap[nd] = 0;
+                dayHoursMap[nd] += hrs;
+                totalHours += hrs;
+            });
+
+            // 检测超时天数
+            const overloadedDays = Object.entries(dayHoursMap)
+                .filter(([d, h]) => h > maxHrsPerDay + 0.01)
+                .map(([d, h]) => ({ day: parseInt(d), hours: h, over: h - maxHrsPerDay }))
+                .sort((a, b) => a.day - b.day);
+
+            let html = '';
+            const completedCount = allTasks.filter(t => t.status === '已完成' || t.status === 'completed').length;
+            const pct = allTasks.length > 0 ? Math.round(completedCount / allTasks.length * 100) : 0;
+
+            // 超时警告横幅
+            if (overloadedDays.length > 0) {
+                const dayList = overloadedDays.slice(0, 6).map(d => 'Day ' + d.day).join('、');
+                const more = overloadedDays.length > 6 ? ` 等${overloadedDays.length}天` : '';
+                html += `
+                <div class="roadmap-overload-banner">
+                    <span class="overload-icon">⚠️</span>
+                    <div style="flex:1;">
+                        <div><span class="overload-days">${dayList}${more}</span> 任务总时长超出每日 <b>${maxHrsPerDay}</b> 小时限制</div>
+                        <div style="font-size:11px;opacity:.8;margin-top:2px;">已自动拆分每日任务，但总耗时仍超限。建议减少每日任务量或提高每日可用时间</div>
+                        <div class="overload-actions">
+                            <button onclick="document.getElementById('sdDailyHours').value='${Math.ceil(Math.max(...overloadedDays.map(d=>d.hours)) * 2) / 2}';showToast('已建议修改每日时长为 ' + document.getElementById('sdDailyHours').value + ' 小时，请重新拆解','info')">🔧 建议调整</button>
+                            <button onclick="scrollToOverloadedDays()">📍 查看超时任务</button>
+                        </div>
+                    </div>
+                </div>`;
+            }
+
+            html += `
+            <div class="roadmap-progress-bar">
+                <span class="prog-label">🗺 学习路线图</span>
+                <div class="prog-track">
+                    <div class="prog-fill" style="width:${pct}%"></div>
+                </div>
+                <span class="prog-pct">${completedCount}/${allTasks.length}</span>
+            </div>`;
+
+            html += '<div class="roadmap-timeline">';
+
+            if (phaseTasks.length) {
+                for (const phase of phaseTasks) {
+                    const phName = (phase.title || '').replace('📋 ', '');
+                    const phDesc = phase.description || '';
+                    const rangeMatch = phName.match(/第\s*(\d+)\s*-\s*(\d+)\s*天/);
+                    const startDay = rangeMatch ? parseInt(rangeMatch[1]) : 1;
+                    const endDay = rangeMatch ? parseInt(rangeMatch[2]) : 7;
+
+                    html += `<div class="roadmap-phase-marker">
+                        <div class="phase-node">${String(phaseTasks.indexOf(phase) + 1).padStart(2,'0')}</div>
+                        <div class="roadmap-phase-card">
+                            <div class="phase-name">🚩 ${phName}</div>
+                            ${phDesc ? '<div class="phase-focus">'+phDesc+'</div>' : ''}
+                            <div class="phase-range">第 ${startDay}-${endDay} 天</div>
+                        </div>
+                    </div>`;
+
+                    for (const t of dailyTasks) {
+                        if (shownTitles.has(t.title)) continue;
+                        const dm = (t.title || '').match(/第\s*(\d+)\s*天/);
+                        const nd = dm ? parseInt(dm[1]) : -1;
+                        if (nd >= startDay && nd <= endDay) {
+                            shownTitles.add(t.title);
+                            const dayHrs = dayHoursMap[nd] || 0;
+                            html += renderRoadmapDayCard(t, nd, dayHrs, maxHrsPerDay, overloadedDays);
+                        }
+                    }
+                }
+
+                for (const t of dailyTasks) {
+                    if (!shownTitles.has(t.title)) {
+                        shownTitles.add(t.title);
+                        const dm = (t.title || '').match(/第\s*(\d+)\s*天/);
+                        const nd = dm ? parseInt(dm[1]) : -1;
+                        html += renderRoadmapDayCard(t, nd, 0, maxHrsPerDay, overloadedDays);
+                    }
+                }
+            } else {
+                dailyTasks.forEach((t, i) => {
+                    const nd = i + 1;
+                    const dayHrs = dayHoursMap[nd] || 0;
+                    html += renderRoadmapDayCard(t, nd, dayHrs, maxHrsPerDay, overloadedDays);
+                });
+            }
+
+            html += '</div>';
+            container.innerHTML = html;
+            updateBatchBar();
+        }
+
+        function extractTaskHours(task) {
+            if (!task.description) return parseFloat(task.suggested_hours) || parseFloat(task.daily_hours) || 2.0;
+            const m = task.description.match(/预计\s*(\d+\.?\d*)\s*小时/);
+            if (m) return parseFloat(m[1]);
+            const m2 = task.description.match(/建议学习时长[：:]\s*(\d+\.?\d*)\s*小时/);
+            if (m2) return parseFloat(m2[1]);
+            const m3 = task.description.match(/(\d+\.?\d*)\s*小时/);
+            if (m3) return parseFloat(m3[1]);
+            return parseFloat(task.suggested_hours) || parseFloat(task.daily_hours) || 2.0;
+        }
+
+        function renderRoadmapDayCard(task, dayNumOverride, dayHours, maxHrsPerDay, overloadedDays) {
+            const dayMatch = (task.title || '').match(/第\s*(\d+)\s*天/);
+            const dayNum = dayNumOverride || (dayMatch ? parseInt(dayMatch[1]) : allTasks.indexOf(task) + 1);
+
+            const taskDate = task.due_date ? new Date(task.due_date) : null;
+            const today = new Date();
+            const isToday = taskDate ? (
+                taskDate.getFullYear() === today.getFullYear() &&
+                taskDate.getMonth() === today.getMonth() &&
+                taskDate.getDate() === today.getDate()
+            ) : false;
+
+            const isCompleted = task.status === '已完成' || task.status === 'completed';
+            const isOverloaded = overloadedDays && overloadedDays.some(d => d.day === dayNum);
+
+            const cls = [
+                'roadmap-day-card',
+                isToday ? 'today' : '',
+                isCompleted ? 'completed' : '',
+                isOverloaded ? 'overloaded' : ''
+            ].filter(Boolean).join(' ');
+
+            const displayTitle = (task.title || '')
+                .replace(/^第\s*\d+\s*天[：:]\s*/, '')
+                .replace(/📋\s*/, '');
+
+            const desc = (task.description || '').split('\n')[0].substring(0, 60);
+
+            // 每日耗时进度条
+            const pctWidth = maxHrsPerDay > 0 ? Math.min(dayHours / maxHrsPerDay * 100, 100) : 100;
+            const hrsColor = isOverloaded ? 'warning' : 'normal';
+            const hrsLabelCls = isOverloaded ? 'over' : '';
+            const hrsText = dayHours > 0 ? `${dayHours}h / ${maxHrsPerDay}h` : '';
+            const overText = isOverloaded ? ` ⚠️ 超出${(dayHours - maxHrsPerDay).toFixed(1)}h` : '';
+
+            // 日期显示：如 "周五 7/11"
+            const weekdays = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+            const dateLabel = taskDate
+                ? `${weekdays[taskDate.getDay()]} ${(taskDate.getMonth()+1)}/${taskDate.getDate()}`
+                : '';
+
+            return `
+            <div class="${cls}" data-day="${dayNum}">
+                <div class="day-dot"></div>
+                <div class="day-inner" onclick="editTask(${task.id})" title="点击查看/编辑任务详情">
+                    <div class="day-badge-num">
+                        <div class="day-badge-day">D${String(dayNum).padStart(2,'0')}</div>
+                        ${dateLabel ? `<div class="day-badge-date">${dateLabel}</div>` : ''}
+                    </div>
+                    <div class="day-body">
+                        <div class="day-title">${displayTitle}</div>
+                        <div class="day-meta">
+                            ${desc ? '<span>📝 '+desc+'</span>' : ''}
+                            ${taskDate ? '<span>📅 '+taskDate.toLocaleDateString('zh-CN')+'</span>' : ''}
+                            ${task.priority ? '<span>⚡ '+task.priority+'</span>' : ''}
+                            ${task.course_name ? '<span>📖 '+task.course_name+'</span>' : ''}
+                        </div>
+                        ${hrsText ? `
+                        <div class="roadmap-day-hrs-label ${hrsLabelCls}">
+                            🕐 ${hrsText}${overText}
+                        </div>
+                        <div class="roadmap-day-hrs-bar">
+                            <div class="hrs-fill ${hrsColor}" style="width:${pctWidth}%"></div>
+                        </div>` : ''}
+                    </div>
+                    <button class="day-action" title="${isCompleted?'重开':'完成'}" onclick="event.stopPropagation();${isCompleted ? "updateTaskStatus("+task.id+",'待办')" : "toggleTask("+task.id+")"}">${isCompleted?'↩':'✓'}</button>
+                </div>
+            </div>`;
         }
 
         function renderListView() {
@@ -1160,12 +1680,27 @@
         }
 
         // ========== 初始化 ==========
+        // 从 localStorage 恢复每日可用时长设置
+        (function() {
+            const saved = localStorage.getItem('roadmap_daily_hours');
+            if (saved) { document.getElementById('sdDailyHours').value = saved; }
+        })();
         loadCourses().then(() => loadTasks());
 
         // 回车触发放送（在 textarea 中 Shift+Enter 换行，Enter 拆解）
         document.getElementById('sdGoalInput').addEventListener('keydown', function(e) {
             if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); smartDecompose(); }
         });
+
+        // 滚动到第一个超时任务卡片
+        function scrollToOverloadedDays() {
+            const first = document.querySelector('.roadmap-day-card.overloaded');
+            if (first) {
+                first.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                first.style.transform = 'scale(1.03)';
+                setTimeout(() => { first.style.transform = ''; }, 600);
+            }
+        }
     </script>
 </body>
 </html>
