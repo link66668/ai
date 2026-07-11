@@ -254,7 +254,7 @@ class AsyncPipeline:
         self._update_stage(doc_id, 'chunking', 0.7)
         t0 = time.time()
         chunking = ChunkingService()
-        chunks = chunking.chunk_document(full_text, pages, structure)
+        chunks = chunking.chunk_document(full_text)
         for chunk in chunks:
             chunk['document_id'] = doc_id
             chunk['course_id'] = course_id

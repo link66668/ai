@@ -59,22 +59,9 @@ class DocumentStructureExtractor:
         tables = self._extract_table_captions(full_text)
         toc_tree = self._build_toc_tree(headings)
 
-        # 构建 heading_positions: [(start, end, heading_text, level, path), ...]
-        # 供 ChunkingService 做基于位置的标题路径注入
-        heading_positions = []
-        for i, h in enumerate(headings):
-            start = h.get('position', 0)
-            text = h.get('text', '')
-            level = h.get('level', 1)
-            # 用该标题自己的位置 +1 来构建包含自身的路径
-            path = self.get_heading_path(headings, start + 1)
-            end = start + len(h.get('line', text))
-            heading_positions.append((start, end, text, level, path))
-
         return {
             'toc_tree': toc_tree,
             'headings': headings,
-            'heading_positions': heading_positions,
             'figures': figures,
             'tables': tables,
         }

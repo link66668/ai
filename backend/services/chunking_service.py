@@ -37,14 +37,12 @@ class ChunkingService:
     def count_tokens(self, text):
         return self._tc.count(text)
 
-    def chunk_document(self, full_text, pages_texts=None, structure_data=None):
+    def chunk_document(self, full_text):
         """
         结构感知分块 — 按标题切分，保留标题上下文
 
         Args:
             full_text: 全文文本
-            pages_texts: 每页文本列表（可选，暂用于页码）
-            structure_data: 文档结构（含 heading_positions）
 
         Returns:
             list[dict]:

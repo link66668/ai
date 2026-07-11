@@ -137,15 +137,34 @@ class StreamingService:
 
                 # ---- 处理 tool_call ----
                 if not tool_calls:
-                    # 本次没有 tool_call → 完成
-                    yield self._event({
-                        'type': 'text', 'content': '', 'done': True,
-                        'full_response': full_response,
-                    })
-                    return
+                    # 检查流式文本中是否包含 XML 格式的工具调用（部分模型不支持
+                    # OpenAI function calling，会将工具调用输出为 XML 文本）
+                    xml_tool_calls = self._parse_xml_tool_calls(full_response)
+                    if xml_tool_calls:
+                        tool_calls = {}
+                        for idx, (name, args) in enumerate(xml_tool_calls):
+                            tc_id = f"xml_call_{idx}"
+                            tool_calls[idx] = {
+                                'id': tc_id,
+                                'function': {
+                                    'name': name,
+                                    'arguments': json.dumps(args, ensure_ascii=False),
+                                },
+                            }
+                        # 已输出的 XML 文本不撤回，但用 tool_call 事件覆盖
+                        full_response = ''
+                    else:
+                        # 真正的纯文本回复
+                        yield self._event({
+                            'type': 'text', 'content': '', 'done': True,
+                            'full_response': full_response,
+                        })
+                        return
 
                 # 执行工具
-                assistant_msg = {'role': 'assistant', 'content': full_response or None}
+                # 注意：当有 tool_calls 时，content 必须为 null（某些模型要求）
+                # 已有文字通过 yield 发出去了，assistant 消息里不携带文字
+                assistant_msg = {'role': 'assistant', 'content': None}
                 tool_messages = []
 
                 for idx in sorted(tool_calls.keys()):
@@ -185,10 +204,16 @@ class StreamingService:
                         'result_count': result_count,
                     })
 
-                    # 收集 tool 消息（不回传给前端，仅用于下一轮 LLM 调用）
-                    assistant_msg['tool_calls'] = [
-                        {'id': tc_id, 'type': 'function', 'function': tc['function']}
-                    ]
+                    # 收集 tool 消息
+                    tc_function = tc['function']
+                    assistant_msg.setdefault('tool_calls', []).append({
+                        'id': tc_id,
+                        'type': 'function',
+                        'function': {
+                            'name': tc_function.get('name', ''),
+                            'arguments': tc_function.get('arguments', ''),
+                        },
+                    })
                     tool_messages.append({
                         'role': 'tool',
                         'tool_call_id': tc_id,
@@ -252,6 +277,49 @@ class StreamingService:
                 'type': 'text', 'content': f'\n\n[AI 服务暂时不可用: {str(e)}]',
                 'done': True, 'error': str(e),
             })
+
+    @staticmethod
+    def _parse_xml_tool_calls(text):
+        """
+        解析 XML 格式的工具调用文本（部分模型的 fallback）
+
+        格式:
+          <tool_calls>
+          <invoke name="kb_search">
+          <parameter name="query" string="true">分组密码 定义 特点</parameter>
+          </invoke>
+          </tool_calls>
+
+        Returns:
+            list[(name, dict)] — [(工具名, 参数字典), ...]
+        """
+        if not text or '<tool_calls>' not in text:
+            return []
+
+        import re
+        calls = []
+        # 匹配 <invoke name="xxx">...</invoke>
+        invoke_pattern = re.compile(
+            r'<invoke\s+name="([^"]+)"\s*>(.*?)</invoke>',
+            re.DOTALL,
+        )
+        param_pattern = re.compile(
+            r'<parameter\s+name="([^"]+)"\s+string="true">(.*?)</parameter>',
+            re.DOTALL,
+        )
+
+        for invoke_match in invoke_pattern.finditer(text):
+            name = invoke_match.group(1)
+            body = invoke_match.group(2)
+            args = {}
+            for param_match in param_pattern.finditer(body):
+                pname = param_match.group(1)
+                pvalue = param_match.group(2).strip()
+                args[pname] = pvalue
+            if name and args:
+                calls.append((name, args))
+
+        return calls
 
     @staticmethod
     def _event(data):
