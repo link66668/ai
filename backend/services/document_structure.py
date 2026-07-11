@@ -12,25 +12,34 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+# ========== 共享标题检测模式（chunking_service.py 也引用） ==========
+
+HEADING_PATTERNS = [
+    # 第X章、第X节
+    (re.compile(r'^第([一二三四五六七八九十\d]+)章\s*(.*)'), 1),
+    (re.compile(r'^第([一二三四五六七八九十\d]+)节\s*(.*)'), 2),
+    # 数字编号: 1. / 1.1 / 1.1.1
+    (re.compile(r'^(\d+)\.\s+(.+)'), 2),
+    (re.compile(r'^(\d+\.\d+)\s+(.+)'), 3),
+    (re.compile(r'^(\d+\.\d+\.\d+)\s+(.+)'), 4),
+    # 中文编号: 一、/ （一）
+    (re.compile(r'^([一二三四五六七八九十]+)[、\．]\s*(.+)'), 1),
+    (re.compile(r'^[（(]([一二三四五六七八九十]+)[）)]\s*(.+)'), 2),
+    # Markdown 风格: ## / ###
+    (re.compile(r'^(#{1,6})\s+(.+)'), None),  # level = len(match.group(1))
+]
+
+FIGURE_TABLE_PATTERNS = [
+    re.compile(r'(图|Figure|Fig\.?)\s*(\d+[\.\d]*)\s*[:：\s]?\s*(.*)'),
+    re.compile(r'(表|Table)\s*(\d+[\.\d]*)\s*[:：\s]?\s*(.*)'),
+]
+
 
 class DocumentStructureExtractor:
     """文档结构提取器"""
 
-    # 中文标题模式
-    HEADING_PATTERNS = [
-        # 第X章、第X节
-        (re.compile(r'^第([一二三四五六七八九十\d]+)章\s*(.*)'), 1),
-        (re.compile(r'^第([一二三四五六七八九十\d]+)节\s*(.*)'), 2),
-        # 数字编号: 1. / 1.1 / 1.1.1
-        (re.compile(r'^(\d+)\.\s+(.+)'), 2),
-        (re.compile(r'^(\d+\.\d+)\s+(.+)'), 3),
-        (re.compile(r'^(\d+\.\d+\.\d+)\s+(.+)'), 4),
-        # 中文编号: 一、/ （一）
-        (re.compile(r'^([一二三四五六七八九十]+)[、\．]\s*(.+)'), 1),
-        (re.compile(r'^[（(]([一二三四五六七八九十]+)[）)]\s*(.+)'), 2),
-        # Markdown 风格: ## / ###
-        (re.compile(r'^(#{1,6})\s+(.+)'), None),  # level = len(match.group(1))
-    ]
+    HEADING_PATTERNS = HEADING_PATTERNS  # 模块级常量引用
+    FIGURE_TABLE_PATTERNS = FIGURE_TABLE_PATTERNS
 
     # 图表标题模式
     FIGURE_TABLE_PATTERNS = [

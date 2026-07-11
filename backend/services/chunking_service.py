@@ -2,31 +2,14 @@
 结构感知分块服务（仿 cherry-studio）
 
 按章节标题切分文档，每个标题+内容作为一个语义块。
-保证标题和其正文在同一块中，检索时匹配标题即能拿到内容。
-
-分块策略:
-  1. 从全文解析标题层级（支持 Markdown ## / 中文"第X章" / 数字 1.1）
-  2. 按标题边界分割为章节
-  3. 章节大小适中则保持独立；过大（> CHUNK_SIZE）则句子边界拆分
-  4. 每个块继承所属标题的 heading_path
+标题检测模式统一引用 document_structure 的 HEADING_PATTERNS。
 """
-import re
 from config import Config
+from services.document_structure import HEADING_PATTERNS as HEADING_RULES
 
 
 class ChunkingService:
     """结构感知分块器"""
-
-    # 标题检测模式（与 document_structure.py 一致）
-    HEADING_PATTERNS = [
-        re.compile(r'^第([一二三四五六七八九十\d]+)章\s*(.*)'),
-        re.compile(r'^第([一二三四五六七八九十\d]+)节\s*(.*)'),
-        re.compile(r'^(\d+)\.\s+(.+)'),
-        re.compile(r'^(\d+\.\d+)\s+(.+)'),
-        re.compile(r'^(\d+\.\d+\.\d+)\s+(.+)'),
-        re.compile(r'^([一二三四五六七八九十]+)[、\．]\s*(.+)'),
-        re.compile(r'^(#{1,6})\s+(.+)'),
-    ]
 
     def __init__(self, chunk_size=None, chunk_overlap=None):
         self.chunk_size = chunk_size or Config.CHUNK_SIZE
@@ -92,7 +75,7 @@ class ChunkingService:
             if not stripped or len(stripped) > 100:
                 continue
 
-            for pattern in self.HEADING_PATTERNS:
+            for pattern, _ in HEADING_RULES:
                 match = pattern.match(stripped)
                 if match:
                     last = match.lastindex or 1

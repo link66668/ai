@@ -56,187 +56,162 @@ class StreamingService:
     def stream_with_tools(self, messages, tools, tool_executor,
                           conversation_id=None, temperature=0.7, ai_config=None):
         """
-        带 tool calling 的流式聊天
+        带 tool calling 的流式聊天（仿 cherry-studio Agent loop）
 
-        流程（仿 cherry-studio Agent loop）:
-          1. 调 LLM（带 tools 定义）
-          2. 如果 LLM 返回 tool_call → 执行工具 → 继续调 LLM
-          3. 流式输出最终文本
-
-        Args:
-            messages: LLM 消息列表
-            tools: 工具定义列表（OpenAI function calling 格式）
-            tool_executor: 可调用对象，接收 (tool_name, arguments) 返回结果 dict
-            conversation_id: 对话 ID
-            temperature: 温度
-            ai_config: AI 配置
-
-        Yields: SSE 字符串
+        流程: 调 LLM(tools) → 有 tool_call → 执行工具 → 继续调 LLM → 输出文本
         """
         cfg = ai_config or {}
-        use_real_llm = cfg.get('use_real_llm', Config.USE_REAL_LLM)
-
-        if not Config.STREAMING_ENABLED or not use_real_llm:
+        if not Config.STREAMING_ENABLED or not cfg.get('use_real_llm', Config.USE_REAL_LLM):
             yield from self._fallback_blocking(messages, conversation_id, ai_config)
             return
 
-        # 最多允许 N 轮工具调用（防止死循环）
-        max_rounds = 3
         current_messages = list(messages)
         current_tools = list(tools)
 
-        for _round in range(max_rounds):
+        for _round in range(3):  # 最多 3 轮
             try:
-                client = self._get_client(ai_config)
-                if conversation_id:
-                    self.clear_interrupted(conversation_id)
-
-                stream = client.chat.completions.create(
+                stream = self._get_client(ai_config).chat.completions.create(
                     model=cfg.get('ai_model') or Config.AI_MODEL,
                     messages=current_messages,
-                    tools=current_tools if current_tools else None,
-                    stream=True,
-                    temperature=temperature,
-                    max_tokens=2048,
+                    tools=current_tools or None,
+                    stream=True, temperature=temperature, max_tokens=2048,
                 )
 
-                # 收集本次流的所有 chunk
-                tool_calls = {}    # index → {id, function: {name, arguments}}
-                full_response = ''
+                # 收集流式 chunk，检测 tool_call
+                tool_calls, full_response = self._consume_stream(
+                    stream, conversation_id,
+                )
 
-                for chunk in stream:
-                    if conversation_id and self.is_interrupted(conversation_id):
-                        yield self._event({'type': 'text', 'content': '', 'done': True, 'interrupted': True})
-                        return
-
-                    delta = chunk.choices[0].delta if chunk.choices else None
-                    if not delta:
-                        continue
-
-                    # 检测 tool_call
-                    if delta.tool_calls:
-                        for tc in delta.tool_calls:
-                            idx = tc.index
-                            if idx not in tool_calls:
-                                tool_calls[idx] = {
-                                    'id': tc.id or '',
-                                    'function': {'name': '', 'arguments': ''},
-                                }
-                            if tc.id:
-                                tool_calls[idx]['id'] = tc.id
-                            if tc.function:
-                                if tc.function.name:
-                                    tool_calls[idx]['function']['name'] = tc.function.name
-                                if tc.function.arguments:
-                                    tool_calls[idx]['function']['arguments'] += tc.function.arguments
-
-                    # 检测文本
-                    if delta.content:
-                        full_response += delta.content
-                        yield self._event({'type': 'text', 'content': delta.content, 'done': False})
-
-                # ---- 处理 tool_call ----
+                # 无 tool_call → 纯文本回复
                 if not tool_calls:
-                    # 检查流式文本中是否包含 XML 格式的工具调用（部分模型不支持
-                    # OpenAI function calling，会将工具调用输出为 XML 文本）
-                    xml_tool_calls = self._parse_xml_tool_calls(full_response)
-                    if xml_tool_calls:
-                        tool_calls = {}
-                        for idx, (name, args) in enumerate(xml_tool_calls):
-                            tc_id = f"xml_call_{idx}"
-                            tool_calls[idx] = {
-                                'id': tc_id,
-                                'function': {
-                                    'name': name,
-                                    'arguments': json.dumps(args, ensure_ascii=False),
-                                },
-                            }
-                        # 已输出的 XML 文本不撤回，但用 tool_call 事件覆盖
-                        full_response = ''
-                    else:
-                        # 真正的纯文本回复
-                        yield self._event({
-                            'type': 'text', 'content': '', 'done': True,
-                            'full_response': full_response,
-                        })
-                        return
-
-                # 执行工具
-                # 注意：当有 tool_calls 时，content 必须为 null（某些模型要求）
-                # 已有文字通过 yield 发出去了，assistant 消息里不携带文字
-                assistant_msg = {'role': 'assistant', 'content': None}
-                tool_messages = []
-
-                for idx in sorted(tool_calls.keys()):
-                    tc = tool_calls[idx]
-                    tc_id = tc['id']
-                    func_name = tc['function']['name']
-                    try:
-                        func_args = json.loads(tc['function']['arguments'])
-                    except json.JSONDecodeError:
-                        func_args = {}
-
-                    # 发出 tool_call_start 事件
                     yield self._event({
-                        'type': 'tool_call_start',
-                        'tool_call_id': tc_id,
-                        'function': func_name,
-                        'arguments': func_args,
+                        'type': 'text', 'content': '', 'done': True,
+                        'full_response': full_response,
                     })
+                    return
 
-                    # 执行工具
-                    try:
-                        result = tool_executor(func_name, func_args)
-                    except Exception as e:
-                        result = {'error': str(e)}
+                # 有 tool_call → 执行工具 + 收集结果
+                assistant_msg, tool_messages = yield from self._execute_tools(
+                    tool_calls, tool_executor,
+                )
 
-                    # 发出 tool_call_end 事件
-                    result_count = 0
-                    if isinstance(result, dict):
-                        result_count = len(result.get('results', result.get('citations', [])))
-                    elif isinstance(result, list):
-                        result_count = len(result)
-
-                    yield self._event({
-                        'type': 'tool_call_end',
-                        'tool_call_id': tc_id,
-                        'function': func_name,
-                        'result_count': result_count,
-                    })
-
-                    # 收集 tool 消息
-                    tc_function = tc['function']
-                    assistant_msg.setdefault('tool_calls', []).append({
-                        'id': tc_id,
-                        'type': 'function',
-                        'function': {
-                            'name': tc_function.get('name', ''),
-                            'arguments': tc_function.get('arguments', ''),
-                        },
-                    })
-                    tool_messages.append({
-                        'role': 'tool',
-                        'tool_call_id': tc_id,
-                        'content': json.dumps(result, ensure_ascii=False),
-                    })
-
-                # 将 assistant 消息 + tool 结果追加到对话，准备下一轮
+                # 追加到对话，第二轮不给 tools
                 current_messages.append(assistant_msg)
                 current_messages.extend(tool_messages)
-                # 第二轮不再给 tools（模型已经搜到结果，直接回答）
                 current_tools = []
 
-                # 继续下一轮循环
-                continue
-
             except Exception as e:
-                logger.error(f"LLM 流式调用失败 (round {_round + 1}): {e}")
+                logger.error(f"LLM 调用失败 (round {_round + 1}): {e}")
                 yield from self._fallback_blocking(current_messages, conversation_id, ai_config)
                 return
 
-        # 超过最大轮数，直接给 fallback
-        logger.warning(f"工具调用超过最大轮数 ({max_rounds})，走降级")
+        logger.warning(f"工具调用超过 3 轮，走降级")
         yield from self._fallback_blocking(current_messages, conversation_id, ai_config)
+
+    def _consume_stream(self, stream, conversation_id):
+        """
+        消费流式 chunk，返回 (tool_calls_dict, full_response_text)
+
+        同时检测 JSON 格式（OpenAI function calling）和 XML 格式的 tool_call。
+        中断时 yield done 事件后返回空。
+        """
+        tool_calls = {}
+        full_response = ''
+
+        for chunk in stream:
+            if conversation_id and self.is_interrupted(conversation_id):
+                yield self._event({'type': 'text', 'content': '', 'done': True, 'interrupted': True})
+                return tool_calls, full_response
+
+            delta = chunk.choices[0].delta if chunk.choices else None
+            if not delta:
+                continue
+
+            # JSON 格式 tool_call
+            if delta.tool_calls:
+                for tc in delta.tool_calls:
+                    idx = tc.index
+                    if idx not in tool_calls:
+                        tool_calls[idx] = {'id': '', 'function': {'name': '', 'arguments': ''}}
+                    if tc.id:
+                        tool_calls[idx]['id'] = tc.id
+                    if tc.function:
+                        if tc.function.name:
+                            tool_calls[idx]['function']['name'] = tc.function.name
+                        if tc.function.arguments:
+                            tool_calls[idx]['function']['arguments'] += tc.function.arguments
+
+            if delta.content:
+                full_response += delta.content
+                yield self._event({'type': 'text', 'content': delta.content, 'done': False})
+
+        # 无 JSON tool_call 时尝试 XML 格式 fallback
+        if not tool_calls:
+            xml_calls = self._parse_xml_tool_calls(full_response)
+            if xml_calls:
+                tool_calls = {}
+                for idx, (name, args) in enumerate(xml_calls):
+                    tool_calls[idx] = {
+                        'id': f"xml_call_{idx}",
+                        'function': {'name': name, 'arguments': json.dumps(args, ensure_ascii=False)},
+                    }
+
+        return tool_calls, full_response
+
+    def _execute_tools(self, tool_calls, tool_executor):
+        """
+        执行工具，yield tool_call_start/end 事件
+
+        Returns:
+            (assistant_msg, tool_messages) — 用于下一轮 LLM 调用
+        """
+        assistant_msg = {'role': 'assistant', 'content': None}
+        tool_messages = []
+
+        for idx in sorted(tool_calls.keys()):
+            tc = tool_calls[idx]
+            tc_id = tc['id']
+            func_name = tc['function']['name']
+            try:
+                func_args = json.loads(tc['function']['arguments'])
+            except json.JSONDecodeError:
+                func_args = {}
+
+            yield self._event({
+                'type': 'tool_call_start', 'tool_call_id': tc_id,
+                'function': func_name, 'arguments': func_args,
+            })
+
+            try:
+                result = tool_executor(func_name, func_args)
+            except Exception as e:
+                result = {'error': str(e)}
+
+            result_count = 0
+            if isinstance(result, dict):
+                result_count = len(result.get('results', result.get('citations', [])))
+            elif isinstance(result, list):
+                result_count = len(result)
+
+            yield self._event({
+                'type': 'tool_call_end', 'tool_call_id': tc_id,
+                'function': func_name, 'result_count': result_count,
+            })
+
+            tc_fn = tc['function']
+            assistant_msg.setdefault('tool_calls', []).append({
+                'id': tc_id, 'type': 'function',
+                'function': {
+                    'name': tc_fn.get('name', ''),
+                    'arguments': tc_fn.get('arguments', ''),
+                },
+            })
+            tool_messages.append({
+                'role': 'tool', 'tool_call_id': tc_id,
+                'content': json.dumps(result, ensure_ascii=False),
+            })
+
+        return assistant_msg, tool_messages
 
     # ==================== 阻塞 + 伪流式（降级） ====================
 
