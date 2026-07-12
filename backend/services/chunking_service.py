@@ -4,6 +4,7 @@
 按章节标题切分文档，每个标题+内容作为一个语义块。
 标题检测模式统一引用 document_structure 的 HEADING_PATTERNS。
 """
+import re
 from config import Config
 from services.document_structure import HEADING_PATTERNS as HEADING_RULES
 
