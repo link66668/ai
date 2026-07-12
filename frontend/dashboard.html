@@ -69,8 +69,32 @@
                 </div>
             </div>
 
-            <!-- 快捷入口 -->
+            <!-- 今日课程 + 今日任务（双列） -->
             <div class="card mb-3">
+                <div style="display:flex; gap:0;">
+                    <div style="flex:1; border-right:1px solid var(--border);">
+                        <div class="card-header" style="border-bottom:1px solid var(--border);">
+                            <h3>📅 今日课程</h3>
+                            <a href="/schedule.html" class="btn btn-sm btn-outline">查看全部</a>
+                        </div>
+                        <div class="card-body" id="todayCourses" style="min-height:120px;">
+                            <div class="loading"><div class="spinner"></div></div>
+                        </div>
+                    </div>
+                    <div style="flex:1;">
+                        <div class="card-header" style="border-bottom:1px solid var(--border);">
+                            <h3>✅ 今日任务</h3>
+                            <a href="/tasks.html" class="btn btn-sm btn-outline">查看全部</a>
+                        </div>
+                        <div class="card-body" id="todayTasks" style="min-height:120px;">
+                            <div class="loading"><div class="spinner"></div></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 快捷入口 -->
+            <div class="card">
                 <div class="card-header">
                     <h3>快捷操作</h3>
                 </div>
@@ -83,27 +107,6 @@
                 </div>
             </div>
 
-            <!-- 最近任务 -->
-            <div class="card mb-3">
-                <div class="card-header">
-                    <h3>近期任务</h3>
-                    <a href="/tasks.html" class="btn btn-sm btn-outline">查看全部</a>
-                </div>
-                <div class="card-body" id="recentTasks">
-                    <div class="loading"><div class="spinner"></div></div>
-                </div>
-            </div>
-
-            <!-- 我的课程 -->
-            <div class="card">
-                <div class="card-header">
-                    <h3>我的课程</h3>
-                    <a href="/courses.html" class="btn btn-sm btn-outline">查看全部</a>
-                </div>
-                <div class="card-body" id="recentCourses">
-                    <div class="loading"><div class="spinner"></div></div>
-                </div>
-            </div>
         </main>
     </div>
 
@@ -144,12 +147,167 @@
             document.getElementById('taskCount').textContent = tasks.filter(t => t.status !== '已完成').length;
             document.getElementById('chatCount').textContent = chats.length;
 
-            // 渲染近期任务
-            const recentTasks = tasks.filter(t => t.status !== '已完成').slice(0, 5);
-            renderRecentTasks(recentTasks);
+            // 渲染今日任务（截止日期为今天的待办任务）
+            renderTodayTasks(tasks);
 
-            // 渲染课程
-            renderRecentCourses(courses.slice(0, 4));
+            // 渲染今日课程（从课表描述中解析今日课程）
+            renderTodayCourses(courses);
+        }
+
+        // ========== 课表解析（复用 schedule.html 的逻辑） ==========
+
+        const DAY_NAMES = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
+
+        function parseSchedule(description) {
+            if (!description) return [];
+            const entries = [];
+            const dayMap = {'星期一':0,'星期二':1,'星期三':2,'星期四':3,'星期五':4,'星期六':5,'星期日':6};
+            const regex = /(星期[一二三四五六日])\s*\[(\d+(?:-\d+)*)\]节(?:\((\d{1,2}:\d{2}-\d{1,2}:\d{2})\))?\s*\|\s*(.+?)\s*\|\s*(.+)/g;
+            let match;
+            while ((match = regex.exec(description)) !== null) {
+                const day = dayMap[match[1]];
+                if (day === undefined) continue;
+                const periodStr = match[2];
+                const timeRange = match[3] || '';
+                const location = match[4].trim();
+                const weeks = match[5].trim();
+                const periods = periodStr.split('-').map(Number).filter(n => !isNaN(n));
+                entries.push({ day, periods, timeRange, location, weeks });
+            }
+            return entries;
+        }
+
+        function parseWeeks(weeksStr) {
+            const weeks = new Set();
+            const clean = weeksStr.replace(/\[周\]/g, '').trim();
+            const parts = clean.split(',');
+            parts.forEach(part => {
+                part = part.trim();
+                if (part.includes('-')) {
+                    const [start, end] = part.split('-').map(Number);
+                    if (!isNaN(start) && !isNaN(end)) {
+                        for (let w = start; w <= end; w++) weeks.add(w);
+                    }
+                } else {
+                    const n = Number(part);
+                    if (!isNaN(n)) weeks.add(n);
+                }
+            });
+            return [...weeks];
+        }
+
+        function calcCurrentWeek() {
+            const startDateStr = localStorage.getItem('semester_start_date');
+            if (!startDateStr) return null;
+            const start = new Date(startDateStr + 'T00:00:00');
+            const now = new Date();
+            const diffMs = now - start;
+            const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+            const week = Math.floor(diffDays / 7) + 1;
+            return Math.max(1, Math.min(20, week));
+        }
+
+        function getTodayCourses(courses) {
+            const today = new Date().getDay();  // 0=星期日, 1=星期一, ...
+            if (today === 0) return [];  // 星期日无课
+            const currentWeek = calcCurrentWeek();
+
+            const matched = [];
+            for (const course of courses) {
+                const entries = parseSchedule(course.description);
+                if (!entries.length) continue;
+
+                // 检查今天是否有课
+                const todayEntries = entries.filter(e => e.day === today - 1);  // dayMap: 星期一=0
+                if (!todayEntries.length) continue;
+
+                // 如果知道当前周次，检查是否在本周有课
+                if (currentWeek !== null) {
+                    const inThisWeek = todayEntries.some(e => {
+                        const weeks = parseWeeks(e.weeks);
+                        return weeks.includes(currentWeek);
+                    });
+                    if (!inThisWeek) continue;
+                }
+
+                // 收集今天上课的时间段描述
+                const timeSlots = todayEntries.map(e => {
+                    const periodDesc = e.periods.length > 1
+                        ? `${Math.min(...e.periods)}-${Math.max(...e.periods)}节`
+                        : `${e.periods[0]}节`;
+                    const time = e.timeRange ? ` (${e.timeRange})` : '';
+                    const loc = e.location ? ` @${e.location}` : '';
+                    return `${periodDesc}${time}${loc}`;
+                });
+
+                matched.push({ ...course, todaySlots: timeSlots });
+            }
+
+            return matched;
+        }
+
+        function renderTodayCourses(courses) {
+            const container = document.getElementById('todayCourses');
+            const todayCourses = getTodayCourses(courses);
+
+            if (!todayCourses.length) {
+                const todayName = DAY_NAMES[new Date().getDay()];
+                const weekInfo = calcCurrentWeek() !== null
+                    ? `（第 ${calcCurrentWeek()} 周）`
+                    : '';
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <p style="font-size:32px; margin-bottom:8px;">🎉</p>
+                        <p>${todayName}${weekInfo} 没有课程安排</p>
+                    </div>`;
+                return;
+            }
+
+            container.innerHTML = '<div class="today-course-list">' + todayCourses.map(course => `
+                <div class="today-course-item" onclick="window.location.href='/course_detail.html?id=${course.id}'">
+                    <div class="today-course-left">
+                        <div class="today-course-name">${course.name}</div>
+                        <div class="today-course-slots">
+                            ${course.todaySlots.map(s => `<span class="today-slot">${s}</span>`).join('')}
+                        </div>
+                    </div>
+                    <div class="today-course-right">
+                        <span class="text-muted">👨‍🏫 ${course.teacher || '未设置'}</span>
+                        <span class="text-muted">📎 ${course.doc_count || 0}</span>
+                    </div>
+                </div>
+            `).join('') + '</div>';
+        }
+
+        function renderTodayTasks(tasks) {
+            const container = document.getElementById('todayTasks');
+
+            // 筛选今天的任务：截止日期是今天且未完成的
+            const todayStr = new Date().toISOString().slice(0, 10);
+            const todayTasks = tasks.filter(t =>
+                t.status !== '已完成' &&
+                t.due_date &&
+                t.due_date.slice(0, 10) === todayStr
+            ).slice(0, 5);
+
+            if (!todayTasks.length) {
+                container.innerHTML = '<div class="empty-state" style="padding:24px 0;"><p>今日暂无待办任务</p></div>';
+                return;
+            }
+
+            container.innerHTML = '<ul class="task-list">' + todayTasks.map(task => `
+                <li class="task-item">
+                    <div class="task-checkbox" onclick="toggleTask(${task.id}, this)"></div>
+                    <div class="task-info">
+                        <div class="task-title">${task.title}</div>
+                        <div class="task-meta">
+                            ${task.course_name ? `<span>${task.course_name}</span> · ` : ''}
+                            <span class="task-priority ${getPriorityClass(task.priority)}">${task.priority}</span>
+                            ${task.due_date ? ` · 截止: ${formatDate(task.due_date)}` : ''}
+                        </div>
+                    </div>
+                </li>
+            `).join('') + '</ul>';
         }
 
         function renderRecentTasks(tasks) {
@@ -172,33 +330,6 @@
                     </div>
                 </li>
             `).join('') + '</ul>';
-        }
-
-        function renderRecentCourses(courses) {
-            const container = document.getElementById('recentCourses');
-            if (!courses.length) {
-                container.innerHTML = '<div class="empty-state"><p>暂无课程，<a href="/courses.html">立即创建</a></p></div>';
-                return;
-            }
-
-            container.innerHTML = '<div class="course-grid">' + courses.map(course => `
-                <div class="course-card" onclick="window.location.href='/course_detail.html?id=${course.id}'">
-                    <div class="course-card-header">
-                        <h3>${course.name}</h3>
-                        <span class="badge badge-${course.status === 'active' ? 'active' : 'archived'}">
-                            ${course.status === 'active' ? '进行中' : '已归档'}
-                        </span>
-                    </div>
-                    <div class="course-card-info">
-                        <span>👨‍🏫 ${course.teacher || '未设置'}</span>
-                        <span>📚 ${course.credit || 0}学分</span>
-                    </div>
-                    <div class="course-card-desc">${course.description || '暂无简介'}</div>
-                    <div class="course-card-footer">
-                        <span class="text-muted">📎 ${course.doc_count || 0} 份资料</span>
-                    </div>
-                </div>
-            `).join('') + '</div>';
         }
 
         async function toggleTask(taskId, el) {
