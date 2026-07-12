@@ -102,6 +102,47 @@ class VisionService:
             self._active_engine = 'none'
             return f'[视觉识别失败: {e}]'
 
+    def recognize_bytes(self, image_bytes, mime_type='image/jpeg', ai_config=None):
+        """
+        识别/理解图片内容（直接接收图片字节，避免写磁盘）
+
+        Args:
+            image_bytes: 图片原始字节数据
+            mime_type: 图片 MIME 类型（如 image/jpeg, image/png）
+            ai_config: 用户AI配置 dict（可选）
+
+        Returns:
+            str: 图片内容描述文字
+        """
+        vision_enabled = self._resolve('vision_enabled', ai_config)
+        if isinstance(vision_enabled, str):
+            vision_enabled = vision_enabled.lower() in ('true', '1', 'yes')
+        if not vision_enabled:
+            self._active_engine = 'none'
+            return '[视觉识别未启用]'
+
+        vision_api_key = self._resolve('vision_api_key', ai_config)
+        if not vision_api_key:
+            self._active_engine = 'none'
+            return '[视觉识别未配置 API Key]'
+
+        try:
+            processed = self._preprocess_image_bytes(image_bytes)
+            image_data_uri = self._encode_base64(processed)
+            result = self._call_vision_api(image_data_uri, ai_config)
+            if result and len(result.strip()) > 10:
+                self._active_engine = 'vision_api'
+                return result
+            else:
+                char_count = len(result) if result else 0
+                logger.warning(f"[Vision] API 返回内容过短 ({char_count} 字符)")
+                self._active_engine = 'none'
+                return '[视觉识别失败：API 返回内容为空]'
+        except Exception as e:
+            logger.error(f"[Vision] API 调用失败: {e}")
+            self._active_engine = 'none'
+            return f'[视觉识别失败: {e}]'
+
     def describe_images(self, image_paths, ai_config=None):
         """
         批量处理多张图片（并发调用 Vision API）
@@ -147,10 +188,24 @@ class VisionService:
     # ==================== 图片预处理 ====================
 
     def _preprocess_image(self, image_path):
-        """图片预处理：缩放 + 格式统一"""
+        """图片预处理：缩放 + 格式统一（从文件读取）"""
         from PIL import Image
 
         img = Image.open(image_path)
+        return self._pil_to_jpeg_bytes(img)
+
+    def _preprocess_image_bytes(self, image_bytes):
+        """图片预处理：缩放 + 格式统一（从字节读取）"""
+        from PIL import Image
+        import io
+
+        img = Image.open(io.BytesIO(image_bytes))
+        return self._pil_to_jpeg_bytes(img)
+
+    def _pil_to_jpeg_bytes(self, img):
+        """PIL Image → 预处理后的 JPEG 字节"""
+        from PIL import Image
+        import io
 
         if img.mode == 'RGBA':
             background = Image.new('RGB', img.size, (255, 255, 255))
