@@ -289,11 +289,12 @@ class AIService:
         duration_patterns = [
             (r'(\d+)\s*周', lambda x: int(x) * 7),
             (r'(\d+)\s*天', lambda x: int(x)),
+            (r'半年', lambda x: 180),
+            (r'半\s*个?\s*月', lambda x: 15),
+            (r'([一两二三四五六七八九十\d]+)\s*个?\s*月', lambda x: (cn_num.get(x, int(x)) if x.isdigit() else cn_num.get(x, 1)) * 30),
             (r'两\s*周', lambda x: 14),
             (r'一\s*周', lambda x: 7),
             (r'三\s*周', lambda x: 21),
-            (r'半\s*个?\s*月', lambda x: 15),
-            (r'一\s*个?\s*月', lambda x: 30),
             (r'([一两二三四五六七八九十])\s*天', lambda x: cn_num.get(x, 7)),
         ]
         for pattern, converter in duration_patterns:
@@ -355,13 +356,18 @@ class AIService:
         remaining_text = text
         # 去除常见的动作/时长/虚词，避免被当成课程名
         _clean_patterns = ['两周', '三周', '一周', '一个月', '半个月',
-            '三天', '五天', '七天', '十天', '每天', '我要', '学完',
+            '三个月', '两个月', '四个月', '五个月', '六个月', '个月',
+            '半年', '三年', '四年',
+            '三天', '五天', '七天', '十天', '天内', '天之内', '每天', '我要', '学完',
             '学好', '学会', '掌握', '复习', '学习', '搞定', '搞懂',
             '学期', '之内', '如何', '怎么', '需要', '帮忙', '帮我',
-            '开始', '准备', '预习', '完成', '今天', '明天',
+            '开始', '准备', '预习', '完成', '今天', '明天', '几个月',
         ]
         for _cp in _clean_patterns:
             remaining_text = remaining_text.replace(_cp, ' ')
+        # 正则兜底：清除 \(\d+天(之?内)?\) 及其同义变体
+        remaining_text = re.sub(r'(?:在|的|这|那|余下|剩下)?\d+\s*天(?:\s*之?\s*内)?', ' ', remaining_text)
+        remaining_text = re.sub(r'[天日]内\b', ' ', remaining_text)
         match_source = None  # 记录课程匹配来源
 
         # 第一步：DB已有课程精确匹配
@@ -419,8 +425,9 @@ class AIService:
                           '好好', '帮忙', '帮我', '需要', '一个', '这个', '那个', '什么', '或者',
                           '还有', '以及', '是否', '可以', '应该', '能够', '不能', '已经', '没有',
                           '计划', '任务', '时间', '分钟', '之内', '期末', '期中', '之内',
-                          '我想', '想学', '学点', '东西', '知道', '学什', '但不', '不知'}
-            for cand in candidates:
+                          '我想', '想学', '学点', '东西', '知道', '学什', '但不', '不知',
+                          '个月', '三个月', '两个月', '几个月', '内学', '完', '天内', '天之内'}
+            for cc in cn_candidates:
                 if cand not in skip_words and len(cand) >= 2:
                     found_courses.append(cand)
                     match_source = 'guess'
@@ -448,16 +455,17 @@ class AIService:
             # 最后尝试剩余中文词：先剥离连接词和干扰词再提取
             clean_for_cn = re.sub(r'[和与、,，]+', ' ', remaining_text)
             cn_candidates = re.findall(r'[\u4e00-\u9fff]{2,5}', clean_for_cn)
-            skip_words = {'我要', '两周', '一周', '三天', '七天', '每天', '小时', '复习', '学完', '考试',
+            skip_words2 = {'我要', '两周', '一周', '三天', '七天', '每天', '小时', '复习', '学完', '考试',
                           '准备', '预习', '学习', '今天', '明天', '开始', '完成', '怎么', '如何',
                           '好好', '帮忙', '帮我', '需要', '一个', '这个', '那个', '什么', '或者',
                           '还有', '以及', '是否', '可以', '应该', '能够', '不能', '已经', '没有',
                           '计划', '任务', '时间', '分钟', '之内', '期末', '期中', '之内',
-                          '我想', '想学', '学点', '东西', '知道', '学什', '但不', '不知'}
-            skip_prefixes = {'学', '用', '做', '写', '看', '读', '上', '去', '来', '在', '要', '给', '把', '被', '从', '让'}
+                          '我想', '想学', '学点', '东西', '知道', '学什', '但不', '不知',
+                          '个月', '三个月', '两个月', '几个月', '内学', '完', '天内', '天之内'}
+            _skip_pref = {'学','用','做','写','看','读','上','去','来','在','要','给','把','被','从','让','天','个','月','日','时','分'}
             for cc in cn_candidates:
-                if cc in skip_words: continue
-                if any(cc.startswith(p) for p in skip_prefixes): continue
+                if cc in skip_words2: continue
+                if any(cc.startswith(p) for p in _skip_pref): continue
                 if not found_courses: break
                 # 尝试将短词映射到已知关键词（如 "网络" → "计算机网络"）
                 matched = False
@@ -617,7 +625,7 @@ class AIService:
                 task_hours = dt.get('suggested_hours', 2.0)
 
                 subtasks.append({
-                    'title': f'第{day_num}天：{task_title}',
+                    'title': f'第{day_num}天：{task_title} · ⏱{task_hours}h',
                     'description': f'{task_desc}\n建议学习时长：{task_hours}小时',
                     'due_date': date.strftime('%Y-%m-%d'),
                     'order': order,
@@ -711,7 +719,7 @@ class AIService:
                 task_hours = max(0.5, min(4.0, round(base * variation, 1)))
 
                 day_task = {
-                    'title': f'第{day}天：{task_title}',
+                    'title': f'第{day}天：{task_title} · ⏱{task_hours}h',
                     'description': f'今日重点：{task_title}。按照教学进度系统学习，结合笔记与练习题巩固所学内容，预计 {task_hours} 小时。',
                     'due_date': date.strftime('%Y-%m-%d'),
                     'order': order,

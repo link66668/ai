@@ -251,6 +251,10 @@
         .tg-day-header .day-date { color: var(--gray-400); margin-top: 5px; font-size: 18px; }
         .tg-day-header.today { background: var(--primary-light); }
         .tg-day-header.today .day-name { color: var(--primary); }
+        .tg-day-header.overload { background: #fff3e0; }
+        .tg-day-header.overload .day-name { color: #e65100; }
+        .tg-day-hours { margin-top: 6px; font-size: 11px; color: var(--gray-500); font-weight: 500; }
+        .tg-day-hours.overload { color: #d32f2f; font-weight: 700; }
         .tg-time-label { background: var(--gray-50); padding: 15px 12px; font-size: 20px; color: var(--gray-600); text-align: center; font-weight: 600; border-right: 1px solid var(--gray-200); border-bottom: 1px solid var(--gray-100); display: flex; align-items: center; justify-content: center; }
         .tg-cell { padding: 8px 8px; border-right: 1px solid var(--gray-100); border-bottom: 1px solid var(--gray-100); overflow-y: auto; }
         .tg-cell:hover { background: #fafafa; }
@@ -1103,6 +1107,21 @@
             const maxTasksPerDay = Math.max(1, ...showKeys.map(k => (dayTasks[k] || []).length));
             const hasAnyTasks = showKeys.some(k => (dayTasks[k] || []).length > 0);
 
+            const maxHrsPerDay = parseFloat(localStorage.getItem('roadmap_daily_hours') || '0') || 2.0;
+            const tgOverloadMap = {};
+            for (const key of showKeys) {
+                let totalHrs = 0;
+                for (const t of dayTasks[key] || []) {
+                    totalHrs += extractTaskHours(t);
+                }
+                tgOverloadMap[key] = parseFloat(totalHrs.toFixed(1));
+            }
+            const tgOverloadKeys = new Set(
+                Object.entries(tgOverloadMap)
+                    .filter(([k, h]) => h > maxHrsPerDay + 0.01)
+                    .map(([k]) => k)
+            );
+
             const gridCols = `52px repeat(7, 1fr)`;
             const gridRows = showKeys.map((_, i) => i === 0 ? 'auto' : 'minmax(60px, auto)').join(' ');
             const gridRowsStr = `auto repeat(${maxTasksPerDay}, minmax(60px, auto))`;
@@ -1126,9 +1145,15 @@
                 const key = showKeys[i];
                 const d = weekDates[i];
                 const isToday = key === localDateStr(today);
-                html += `<div class="tg-day-header${isToday ? ' today' : ''}">
+                const isOverload = tgOverloadKeys.has(key);
+                const dayTotal = tgOverloadMap[key] || 0;
+                const overloadBadge = dayTotal > 0
+                    ? `<div class="tg-day-hours${isOverload ? ' overload' : ''}" title="当日任务总时长${isOverload ? ' ⚠️超出限制' : ''}">⏱${dayTotal}h / ${maxHrsPerDay}h${isOverload ? ' ⚠️' : ''}</div>`
+                    : '';
+                html += `<div class="tg-day-header${isToday ? ' today' : ''}${isOverload ? ' overload' : ''}">
                     <div class="day-name">${weekdays[i]}</div>
                     <div class="day-date">${(d.getMonth()+1).toString().padStart(2,'0')}/${d.getDate().toString().padStart(2,'0')}</div>
+                    ${overloadBadge}
                 </div>`;
             }
 
@@ -1326,12 +1351,12 @@
             for (const grp of dateGroups) {
                 let hrs = 0;
                 for (const t of grp.tasks) hrs += extractTaskHours(t);
-                dayHoursMap[grp.dayNum] = hrs;
+                dayHoursMap[grp.dayNum] = parseFloat(hrs.toFixed(1));
             }
 
             const overloadedDays = Object.entries(dayHoursMap)
                 .filter(([d, h]) => h > maxHrsPerDay + 0.01)
-                .map(([d, h]) => ({ day: parseInt(d), hours: h, over: h - maxHrsPerDay }))
+                .map(([d, h]) => ({ day: parseInt(d), hours: h, over: parseFloat((h - maxHrsPerDay).toFixed(1)) }))
                 .sort((a, b) => a.day - b.day);
 
             const shownTitles = new Set();
@@ -1461,11 +1486,12 @@
             const desc = (task.description || '').split('\n')[0].substring(0, 60);
 
             // 每日耗时进度条
-            const pctWidth = maxHrsPerDay > 0 ? Math.min(dayHours / maxHrsPerDay * 100, 100) : 100;
+            const roundedHrs = parseFloat((dayHours || 0).toFixed(1));
+            const pctWidth = maxHrsPerDay > 0 ? Math.min(roundedHrs / maxHrsPerDay * 100, 100) : 100;
             const hrsColor = isOverloaded ? 'warning' : 'normal';
             const hrsLabelCls = isOverloaded ? 'over' : '';
-            const hrsText = dayHours > 0 ? `${dayHours}h / ${maxHrsPerDay}h` : '';
-            const overText = isOverloaded ? ` ⚠️ 超出${(dayHours - maxHrsPerDay).toFixed(1)}h` : '';
+            const hrsText = roundedHrs > 0 ? `${roundedHrs}h / ${maxHrsPerDay}h` : '';
+            const overText = isOverloaded ? ` ⚠️ 超出${(roundedHrs - maxHrsPerDay).toFixed(1)}h` : '';
 
             // 日期显示：如 "周五 7/11"
             const weekdays = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
