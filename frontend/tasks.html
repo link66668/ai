@@ -538,7 +538,6 @@
                             <input type="number" id="sdDailyHours" value="2" min="0.5" max="12" step="0.5" title="每天可用学习时间（小时）">
                             <span>小时</span>
                         </div>
-                        <select id="sdCourseSelect"><option value="">自动匹配课程</option></select>
                         <button class="btn btn-primary btn-decompose" onclick="smartDecompose()" id="sdBtn">🔍 拆解</button>
                     </div>
                     <div class="dp-hint">
@@ -659,6 +658,10 @@
                     <div class="form-group">
                         <label class="form-label">截止日期</label>
                         <input type="date" class="form-control" id="taskDueDate">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">预计时长（小时）</label>
+                        <input type="number" class="form-control" id="taskHours" step="0.5" min="0.5" max="12" placeholder="如不确定可留空">
                     </div>
                 </form>
             </div>
@@ -863,7 +866,7 @@
             if (!decomposeResult || !decomposeResult.subtasks.length) {
                 showToast('没有可创建的任务', 'warning'); return;
             }
-            const courseId = document.getElementById('sdCourseSelect').value || null;
+            const courseId = null;
             const { goal, subtasks, dailyHours } = decomposeResult;
 
             if (!await confirmDialog(`确定要创建 ${subtasks.length} 个任务吗？`)) return;
@@ -892,7 +895,8 @@
                             course_id: courseId, task_type: '复习计划',
                             priority: st.is_phase_header ? '高' : '中',
                             due_date: st.due_date || null,
-                            parent_task_id: parentTaskId
+                            parent_task_id: parentTaskId,
+                            estimated_hours: st.estimated_hours || null
                         });
                         created++;
                     } catch (e) { console.warn('创建子任务失败:', st.title, e); }
@@ -919,7 +923,6 @@
                 const opts = courses.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
                 document.getElementById('courseFilter').innerHTML = '<option value="">全部课程</option>' + opts;
                 document.getElementById('taskCourse').innerHTML = '<option value="">无</option>' + opts;
-                document.getElementById('sdCourseSelect').innerHTML = '<option value="">自动匹配课程</option>' + opts;
             } catch (e) { console.error(e); }
         }
 
@@ -972,7 +975,7 @@
         }
 
         function parseTaskTimeInfo(task) {
-            const info = { day: null, course: '', time_slot: '', priority: task.priority, type: task.task_type, status: task.status };
+            const info = { day: null, course: '', priority: task.priority, type: task.task_type, status: task.status };
             const title = task.title || '';
 
             const dayMatch = title.match(/第\s*(\d+)\s*天/);
@@ -980,19 +983,6 @@
 
             const courseMatch = title.match(/【(.+?)】/);
             if (courseMatch) info.course = courseMatch[1];
-
-            const slotMatch = title.match(/(\d{1,2}:\d{2}[-~—]\d{1,2}:\d{2})/);
-            if (slotMatch) {
-                info.time_slot = slotMatch[1];
-            } else {
-                const amPmMatch = title.match(/(上午|下午|晚上)\s*(\d{1,2}:\d{2}[-~—]\d{1,2}:\d{2})/);
-                if (amPmMatch) info.time_slot = amPmMatch[2];
-                else {
-                    // 新格式：直接包含 上午/下午/晚上
-                    const periodMatch = title.match(/(上午|下午|晚上)/);
-                    if (periodMatch) info.time_slot = periodMatch[1];
-                }
-            }
 
             if (!info.day && task.due_date) {
                 const now = new Date();
@@ -1011,8 +1001,6 @@
             s = s.replace(/^第\d+天\s*/, '');
             s = s.replace(/\d{1,2}:\d{2}[-~—]\d{1,2}:\d{2}\s*\|\s*/, '');
             s = s.replace(/\d{1,2}:\d{2}[-~—]\d{1,2}:\d{2}/, '');
-            s = s.replace(/(?:上午|下午|晚上)\s*\|\s*/g, '');
-            s = s.replace(/(?:上午|下午|晚上)\s*/g, '');
             if (course) {
                 const esc = course.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
                 s = s.replace(new RegExp('【' + esc + '】'), '');
@@ -1097,77 +1085,46 @@
             const isPastWeek = weekDates[6] < today;
             const isFutureWeek = weekDates[0] > today;
 
-            // 三大时段：上午/下午/晚上（替代细粒度时间点）
-            const periodSlots = [
-                { key: '上午', label: '☀️ 上午', range: '7:00~12:00' },
-                { key: '下午', label: '🌤 下午', range: '12:00~18:00' },
-                { key: '晚上', label: '🌙 晚上', range: '18:00~23:00' },
-            ];
-
-            // 初始化 cells
-            const cells = {};
+            // 按日分配任务（不区分时段）
+            const dayTasks = {}; // { dateKey: [taskData...] }
             for (const d of weekDates) {
                 const key = localDateStr(d);
-                cells[key] = { date: d, slots: {} };
-                for (const ps of periodSlots) {
-                    cells[key].slots[ps.key] = [];
-                }
+                dayTasks[key] = [];
             }
-
-            // 分配任务到格子
             for (const task of allTasks) {
+                if (!task.due_date) continue;
+                const due = task.due_date.toString().slice(0, 10);
+                if (!dayTasks[due]) continue;
                 const info = parseTaskTimeInfo(task);
-                const taskData = { ...task, ...info };
-
-                let dateKey = null;
-                if (task.due_date) {
-                    const due = task.due_date.toString().slice(0, 10);
-                    if (cells[due]) dateKey = due;
-                }
-                if (!dateKey) continue;
-
-                // 确定时段：优先匹配标题中的 上午/下午/晚上
-                let targetPeriod = periodSlots[0].key;
-                const title = (task.title || '').toLowerCase();
-                if (title.includes('上午')) targetPeriod = '上午';
-                else if (title.includes('下午')) targetPeriod = '下午';
-                else if (title.includes('晚上')) targetPeriod = '晚上';
-                else if (info.time_slot) {
-                    const slotStart = info.time_slot.match(/(\d{1,2}):/);
-                    if (slotStart) {
-                        const h = parseInt(slotStart[1]);
-                        if (h >= 18) targetPeriod = '晚上';
-                        else if (h >= 12) targetPeriod = '下午';
-                    }
-                }
-
-                cells[dateKey].slots[targetPeriod].push(taskData);
+                dayTasks[due].push({ ...task, ...info });
             }
 
             const showKeys = weekDates.map(d => localDateStr(d));
-            const hasAnyTasks = showKeys.some(k => periodSlots.some(ps => (cells[k] && cells[k].slots[ps.key]) ? cells[k].slots[ps.key].length > 0 : false));
+            const maxTasksPerDay = Math.max(1, ...showKeys.map(k => (dayTasks[k] || []).length));
+            const hasAnyTasks = showKeys.some(k => (dayTasks[k] || []).length > 0);
 
-            const gridCols = `120px repeat(7, 1fr)`;
-            const gridRows = `auto repeat(${periodSlots.length}, minmax(100px, auto))`;
+            const gridCols = `52px repeat(7, 1fr)`;
+            const gridRows = showKeys.map((_, i) => i === 0 ? 'auto' : 'minmax(60px, auto)').join(' ');
+            const gridRowsStr = `auto repeat(${maxTasksPerDay}, minmax(60px, auto))`;
 
             let html = '';
             html += `<div class="week-pager">
-                <button class="pager-btn" onclick="shiftWeek(-1)">◀ 上一周</button>
+                <button class="pager-btn" onclick="shiftWeek(-1)">⬅ 上一周</button>
                 <button class="pager-btn today-btn" onclick="goToToday()" ${isCurrentWeek ? 'disabled' : ''}>今 天</button>
                 <span class="week-label">${weekLabel}</span>
-                <button class="pager-btn" onclick="shiftWeek(1)">下一周 ▶</button>
+                <button class="pager-btn" onclick="shiftWeek(1)">下一周 ➡</button>
                 <span style="margin-left:auto;font-size:11px;color:var(--gray-400);">已选 <b style="color:var(--primary);">${selectedTasks.size}</b> 个</span>
             </div>`;
 
             if (!hasAnyTasks && isFutureWeek) {
                 html += `<div class="week-hint">📭 本周暂无任务 · 共 ${allTasks.length} 个任务分布在整个计划中</div>`;
             }
-            html += `<div class="tg-grid active" style="grid-template-columns:${gridCols};grid-template-rows:${gridRows};">`;
+            html += `<div class="tg-grid active" style="grid-template-columns:${gridCols};grid-template-rows:${gridRowsStr};">`;
 
-            html += '<div class="tg-corner">时间</div>';
+            html += '<div class="tg-corner">序号</div>';
             for (let i = 0; i < 7; i++) {
                 const key = showKeys[i];
-                const d = cells[key].date;
+                const d = weekDates[i];
                 const isToday = key === localDateStr(today);
                 html += `<div class="tg-day-header${isToday ? ' today' : ''}">
                     <div class="day-name">${weekdays[i]}</div>
@@ -1175,24 +1132,22 @@
                 </div>`;
             }
 
-            for (const ps of periodSlots) {
-                html += `<div class="tg-time-label" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;">
-                    <span style="font-size:14px;">${ps.label}</span>
-                    <span style="font-size:10px;color:var(--gray-400);">${ps.range}</span>
-                </div>`;
+            for (let pos = 0; pos < maxTasksPerDay; pos++) {
+                html += `<div class="tg-time-label">${pos + 1}</div>`;
                 for (const key of showKeys) {
-                    const slotTasks = (cells[key] && cells[key].slots[ps.key]) || [];
-                    if (!slotTasks.length) {
-                        html += `<div class="tg-empty-cell" data-date="${key}" data-slot="${ps.key}" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event, '${key}', '${ps.key}')"></div>`;
+                    const tasks = dayTasks[key] || [];
+                    const t = tasks[pos];
+                    if (!t) {
+                        html += `<div class="tg-empty-cell" data-date="${key}" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event, '${key}', ${pos})"></div>`;
                     } else {
-                        html += `<div class="tg-cell" data-date="${key}" data-slot="${ps.key}" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event, '${key}', '${ps.key}')">`;
-                        for (const t of slotTasks) {
-                            const c = getCourseColor(t.course);
-                            const completed = t.status === '已完成';
-                            const selected = selectedTasks.has(t.id);
-                            html += `<div class="tg-chip${completed ? ' completed' : ''}${selected ? ' selected' : ''}"
+                        const c = getCourseColor(t.course);
+                        const completed = t.status === '已完成';
+                        const selected = selectedTasks.has(t.id);
+                        html += `<div class="tg-cell" data-date="${key}" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event, '${key}', ${pos})">
+                            <div class="tg-chip${completed ? ' completed' : ''}${selected ? ' selected' : ''}"
                                 style="background:${c.bg};border-color:${c.border};color:${c.text};"
                                 draggable="true"
+                                data-task-id="${t.id}"
                                 ondragstart="handleDragStart(event, ${t.id})"
                                 ondragend="handleDragEnd(event, ${t.id})"
                                 onclick="event.stopPropagation();toggleSelectGrid(${t.id})"
@@ -1200,9 +1155,8 @@
                                 <div class="tg-chip-check">${selected ? '✓' : ''}</div>
                                 <div class="tg-chip-title">${cleanChipTitle(t.title, t.course || '')}</div>
                                 ${t.description ? `<div class="tg-chip-desc">${t.description.slice(0, 30)}</div>` : ''}
-                            </div>`;
-                        }
-                        html += '</div>';
+                            </div>
+                        </div>`;
                     }
                 }
             }
@@ -1238,7 +1192,31 @@
             e.currentTarget.classList.remove('drag-over');
         }
 
-        async function handleDrop(e, dateKey, slotKey) {
+        function computeDayNumFromDate(dateKey, allTasks) {
+            let minDate = null;
+            for (const t of allTasks) {
+                if (!t.due_date) continue;
+                const d = t.due_date.toString().slice(0, 10);
+                if (!minDate || d < minDate) minDate = d;
+            }
+            if (!minDate) return null;
+            const d1 = new Date(minDate);
+            const d2 = new Date(dateKey);
+            const diffDays = Math.round((d2 - d1) / (1000 * 60 * 60 * 24));
+            return diffDays + 1;
+        }
+
+        function updateTaskDayPrefix(task, dayNum) {
+            if (!dayNum || dayNum < 1) return task.title;
+            let title = task.title || '';
+            title = title.replace(/^第\s*\d+\s*天/, `第${dayNum}天`);
+            if (!title.match(/^第\s*\d+\s*天/)) {
+                title = `第${dayNum}天：${title}`;
+            }
+            return title;
+        }
+
+        async function handleDrop(e, dateKey, targetPos) {
             e.preventDefault();
             e.currentTarget.classList.remove('drag-over');
 
@@ -1248,46 +1226,56 @@
             const task = allTasks.find(t => t.id === taskId);
             if (!task) return;
 
-            const oldTitle = task.title || '';
+            const oldDue = task.due_date ? task.due_date.toString().slice(0, 10) : null;
+            const oldTitle = task.title;
 
-            // 保留原始第N天编号
-            const dayNumMatch = oldTitle.match(/^第(\d+)天/);
-            const dayPrefix = dayNumMatch ? dayNumMatch[0] : '';
+            // 1. 从 allTasks 中移除当前任务
+            const fromIdx = allTasks.indexOf(task);
+            if (fromIdx >= 0) allTasks.splice(fromIdx, 1);
 
-            let core = oldTitle
-                .replace(/^第\d+天\s*[：:]\s*/, '')
-                .replace(/^第\d+天\s*/, '')
-                // 清理旧时段：时间点格式 + 纯中文时段 + 分隔符
-                .replace(/(?:上午|下午|晚上)\s*\|\s*/g, '')
-                .replace(/\d{1,2}:\d{2}[-~—]\d{1,2}:\d{2}\s*\|\s*/, '')
-                .replace(/\d{1,2}:\d{2}[-~—]\d{1,2}:\d{2}/, '')
-                .replace(/(?:上午|下午|晚上)\s*/g, '')
-                .replace(/^[：:]\s*/, '')
-                .trim();
-
-            const courseMatch = core.match(/【(.+?)】\s*/);
-            let courseTag = '';
-            if (courseMatch) {
-                courseTag = courseMatch[0];
-                core = core.replace(courseTag, '');
+            // 2. 收集目标日期已有的任务，确定插入点
+            const sameDayTasks = [];
+            const otherTasks = [];
+            for (const t of allTasks) {
+                const d = t.due_date ? t.due_date.toString().slice(0, 10) : null;
+                if (d === dateKey) sameDayTasks.push(t);
+                else otherTasks.push(t);
             }
 
-            core = core.trim();
+            // 3. 按目标位置插入
+            const pos = typeof targetPos === 'number' ? targetPos : (sameDayTasks.length);
+            sameDayTasks.splice(pos, 0, task);
 
-            // slotKey 已是 "上午"/"下午"/"晚上"，直接用
-            const period = (slotKey === '上午' || slotKey === '下午' || slotKey === '晚上') ? slotKey : '上午';
+            // 4. 更新 due_date + 标题的天数前缀
+            task.due_date = dateKey;
+            const newDayNum = computeDayNumFromDate(dateKey, [...sameDayTasks, ...otherTasks]);
+            if (newDayNum) task.title = updateTaskDayPrefix(task, newDayNum);
 
-            const newTitle = dayPrefix
-                ? `${dayPrefix} ${period} | ${courseTag}${core}`
-                : `${period} | ${courseTag}${core}`;
-            const cleanedTitle = newTitle.replace(/\s*\|\s*$/, '').replace(/\|\s*$/, '');
+            // 5. 重建 allTasks：sameDay 在前，other 排后
+            allTasks.length = 0;
+            allTasks.push(...sameDayTasks, ...otherTasks);
 
             try {
-                await api.updateTask(taskId, { title: cleanedTitle, due_date: dateKey });
-                showToast(`已移至 ${dateKey} ${period}`, 'success');
-                loadTasks();
+                const updateData = { due_date: dateKey };
+                if (newDayNum && task.title !== oldTitle) updateData.title = task.title;
+                await api.updateTask(taskId, updateData);
+                renderTimetableGrid();
             } catch (e) {
-                showToast('移动失败: ' + (e.message || '未知错误'), 'error');
+                task.due_date = oldDue;
+                task.title = oldTitle;
+                const rollIdx = allTasks.indexOf(task);
+                if (rollIdx >= 0) allTasks.splice(rollIdx, 1);
+                const rollSameDay = [];
+                const rollOther = [];
+                for (const t of allTasks) {
+                    const d = t.due_date ? t.due_date.toString().slice(0, 10) : null;
+                    if (d === dateKey) rollSameDay.push(t);
+                    else rollOther.push(t);
+                }
+                rollSameDay.splice(pos, 0, task);
+                allTasks.length = 0;
+                allTasks.push(...rollSameDay, ...rollOther);
+                renderTimetableGrid();
             }
 
             dragTaskId = null;
@@ -1313,29 +1301,40 @@
 
             const phaseTasks = allTasks.filter(t => t.is_phase_header || (t.title && t.title.includes('📋')));
             const dailyTasks = allTasks.filter(t => !phaseTasks.includes(t));
-            const shownTitles = new Set();
 
-            // 从 localStorage 读取每日可用时长
             const maxHrsPerDay = parseFloat(localStorage.getItem('roadmap_daily_hours') || '0') || 2.0;
 
-            // 按天汇总任务耗时
-            const dayHoursMap = {};
-            let totalHours = 0;
-            dailyTasks.forEach(t => {
-                const dm = (t.title || '').match(/第\s*(\d+)\s*天/);
-                const nd = dm ? parseInt(dm[1]) : -1;
-                if (nd < 1) return;
-                const hrs = extractTaskHours(t);
-                if (!dayHoursMap[nd]) dayHoursMap[nd] = 0;
-                dayHoursMap[nd] += hrs;
-                totalHours += hrs;
-            });
+            const dateGroups = [];
+            const dateKeySet = new Set();
+            for (const t of dailyTasks) {
+                if (!t.due_date) continue;
+                const dk = (typeof t.due_date === 'string') ? t.due_date.slice(0, 10) : t.due_date.toString().slice(0, 10);
+                if (!dateKeySet.has(dk)) {
+                    dateKeySet.add(dk);
+                    dateGroups.push({ dateKey: dk, tasks: [] });
+                }
+                const grp = dateGroups.find(g => g.dateKey === dk);
+                if (grp) grp.tasks.push(t);
+            }
+            dateGroups.sort((a, b) => a.dateKey.localeCompare(b.dateKey));
 
-            // 检测超时天数
+            for (let i = 0; i < dateGroups.length; i++) {
+                dateGroups[i].dayNum = i + 1;
+            }
+
+            const dayHoursMap = {};
+            for (const grp of dateGroups) {
+                let hrs = 0;
+                for (const t of grp.tasks) hrs += extractTaskHours(t);
+                dayHoursMap[grp.dayNum] = hrs;
+            }
+
             const overloadedDays = Object.entries(dayHoursMap)
                 .filter(([d, h]) => h > maxHrsPerDay + 0.01)
                 .map(([d, h]) => ({ day: parseInt(d), hours: h, over: h - maxHrsPerDay }))
                 .sort((a, b) => a.day - b.day);
+
+            const shownTitles = new Set();
 
             let html = '';
             const completedCount = allTasks.filter(t => t.status === '已完成' || t.status === 'completed').length;
@@ -1376,7 +1375,7 @@
                     const phDesc = phase.description || '';
                     const rangeMatch = phName.match(/第\s*(\d+)\s*-\s*(\d+)\s*天/);
                     const startDay = rangeMatch ? parseInt(rangeMatch[1]) : 1;
-                    const endDay = rangeMatch ? parseInt(rangeMatch[2]) : 7;
+                    const endDay = rangeMatch ? parseInt(rangeMatch[2]) : dateGroups.length;
 
                     html += `<div class="roadmap-phase-marker">
                         <div class="phase-node">${String(phaseTasks.indexOf(phase) + 1).padStart(2,'0')}</div>
@@ -1387,32 +1386,33 @@
                         </div>
                     </div>`;
 
-                    for (const t of dailyTasks) {
-                        if (shownTitles.has(t.title)) continue;
-                        const dm = (t.title || '').match(/第\s*(\d+)\s*天/);
-                        const nd = dm ? parseInt(dm[1]) : -1;
-                        if (nd >= startDay && nd <= endDay) {
-                            shownTitles.add(t.title);
-                            const dayHrs = dayHoursMap[nd] || 0;
-                            html += renderRoadmapDayCard(t, nd, dayHrs, maxHrsPerDay, overloadedDays);
+                    for (const grp of dateGroups) {
+                        if (grp.dayNum >= startDay && grp.dayNum <= endDay) {
+                            for (const t of grp.tasks) {
+                                if (shownTitles.has(t.title)) continue;
+                                shownTitles.add(t.title);
+                                const dayHrs = dayHoursMap[grp.dayNum] || 0;
+                                html += renderRoadmapDayCard(t, grp.dayNum, dayHrs, maxHrsPerDay, overloadedDays);
+                            }
                         }
                     }
                 }
 
-                for (const t of dailyTasks) {
-                    if (!shownTitles.has(t.title)) {
-                        shownTitles.add(t.title);
-                        const dm = (t.title || '').match(/第\s*(\d+)\s*天/);
-                        const nd = dm ? parseInt(dm[1]) : -1;
-                        html += renderRoadmapDayCard(t, nd, 0, maxHrsPerDay, overloadedDays);
+                for (const grp of dateGroups) {
+                    for (const t of grp.tasks) {
+                        if (!shownTitles.has(t.title)) {
+                            shownTitles.add(t.title);
+                            html += renderRoadmapDayCard(t, grp.dayNum, 0, maxHrsPerDay, overloadedDays);
+                        }
                     }
                 }
             } else {
-                dailyTasks.forEach((t, i) => {
-                    const nd = i + 1;
-                    const dayHrs = dayHoursMap[nd] || 0;
-                    html += renderRoadmapDayCard(t, nd, dayHrs, maxHrsPerDay, overloadedDays);
-                });
+                for (const grp of dateGroups) {
+                    for (const t of grp.tasks) {
+                        const dayHrs = dayHoursMap[grp.dayNum] || 0;
+                        html += renderRoadmapDayCard(t, grp.dayNum, dayHrs, maxHrsPerDay, overloadedDays);
+                    }
+                }
             }
 
             html += '</div>';
@@ -1421,6 +1421,7 @@
         }
 
         function extractTaskHours(task) {
+            if (task.estimated_hours) return parseFloat(task.estimated_hours);
             if (!task.description) return parseFloat(task.suggested_hours) || parseFloat(task.daily_hours) || 2.0;
             const m = task.description.match(/预计\s*(\d+\.?\d*)\s*小时/);
             if (m) return parseFloat(m[1]);
@@ -1472,6 +1473,9 @@
                 ? `${weekdays[taskDate.getDay()]} ${(taskDate.getMonth()+1)}/${taskDate.getDate()}`
                 : '';
 
+            const taskHours = task.estimated_hours ? parseFloat(task.estimated_hours) : 0;
+            const taskHoursBadge = taskHours > 0 ? `⏱ ${taskHours}h` : '';
+
             return `
             <div class="${cls}" data-day="${dayNum}">
                 <div class="day-dot"></div>
@@ -1484,6 +1488,7 @@
                         <div class="day-title">${displayTitle}</div>
                         <div class="day-meta">
                             ${desc ? '<span>📝 '+desc+'</span>' : ''}
+                            ${taskHoursBadge ? '<span>'+taskHoursBadge+'</span>' : ''}
                             ${taskDate ? '<span>📅 '+taskDate.toLocaleDateString('zh-CN')+'</span>' : ''}
                             ${task.priority ? '<span>⚡ '+task.priority+'</span>' : ''}
                             ${task.course_name ? '<span>📖 '+task.course_name+'</span>' : ''}
@@ -1631,6 +1636,7 @@
             document.getElementById('taskEditId').value = '';
             document.getElementById('taskModalTitle').textContent = '新建任务';
             document.getElementById('taskForm').reset();
+            document.getElementById('taskHours').value = '';
             document.getElementById('taskModal').classList.add('active');
         }
 
@@ -1645,6 +1651,7 @@
             document.getElementById('taskType').value = task.task_type || '其他';
             document.getElementById('taskPriority').value = task.priority || '中';
             document.getElementById('taskDueDate').value = task.due_date ? task.due_date.slice(0, 10) : '';
+            document.getElementById('taskHours').value = task.estimated_hours || '';
             document.getElementById('taskModal').classList.add('active');
         }
 
@@ -1664,6 +1671,8 @@
                 priority: document.getElementById('taskPriority').value,
                 due_date: document.getElementById('taskDueDate').value || null
             };
+            const hrsVal = document.getElementById('taskHours').value;
+            if (hrsVal) data.estimated_hours = parseFloat(hrsVal);
 
             try {
                 const editId = document.getElementById('taskEditId').value;

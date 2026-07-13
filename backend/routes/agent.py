@@ -85,7 +85,18 @@ def decompose_task(current_user):
     if not task_title:
         return error_response('任务标题不能为空')
 
-    # 课程别名预处理（解决简称匹配问题）
+    from services.ai_service import ai_service
+    from models.user_ai_config import UserAIConfig
+    ai_config = UserAIConfig.get_effective_config(current_user['id'])
+
+    ok, err_msg = ai_service._verify_llm_available(ai_config=ai_config)
+    if not ok:
+        return error_response(err_msg)
+
+    is_valid, course_feedback = ai_service._validate_is_course(task_title, ai_config=ai_config)
+    if not is_valid:
+        return error_response(course_feedback)
+
     import re
     _route_aliases = {
         '高数': '高等数学', '大英': '大学英语', '线代': '线性代数',
@@ -118,9 +129,5 @@ def decompose_task(current_user):
                 break
     task_title = remaining.strip()
 
-    from services.ai_service import ai_service
-    from models.user_ai_config import UserAIConfig
-    ai_config = UserAIConfig.get_effective_config(current_user['id'])
-
-    result = ai_service.decompose_task(task_title, description, total_days, ai_config=ai_config, daily_hours=daily_hours)
+    result = ai_service.decompose_task(task_title, description, total_days, ai_config=ai_config, daily_hours=daily_hours, user_id=current_user['id'])
     return success_response({'subtasks': result, 'daily_hours': daily_hours if daily_hours > 0 else None})

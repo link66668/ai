@@ -114,6 +114,7 @@ class Database:
                     due_date DATETIME DEFAULT NULL,
                     status TEXT DEFAULT '待办' CHECK(status IN ('待办', '进行中', '已完成')),
                     parent_task_id INTEGER DEFAULT NULL,
+                    estimated_hours REAL DEFAULT NULL,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,

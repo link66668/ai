@@ -50,7 +50,8 @@ def create_task(current_user):
         task_type=data.get('task_type', '其他'),
         priority=data.get('priority', '中'),
         due_date=data.get('due_date'),
-        parent_task_id=data.get('parent_task_id')
+        parent_task_id=data.get('parent_task_id'),
+        estimated_hours=data.get('estimated_hours')
     )
 
     return success_response({'id': task_id}, '创建成功')
@@ -93,7 +94,7 @@ def update_task(current_user, task_id):
         return error_response('请求数据为空')
 
     update_data = {}
-    for field in ['title', 'description', 'task_type', 'priority', 'due_date', 'status', 'course_id']:
+    for field in ['title', 'description', 'task_type', 'priority', 'due_date', 'status', 'course_id', 'estimated_hours']:
         if field in data:
             update_data[field] = data[field]
 

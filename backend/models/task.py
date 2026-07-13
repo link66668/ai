@@ -5,11 +5,11 @@ class Task:
     """学习任务模型"""
 
     @staticmethod
-    def create(user_id, title, description='', course_id=None, task_type='其他', priority='中', due_date=None, parent_task_id=None):
+    def create(user_id, title, description='', course_id=None, task_type='其他', priority='中', due_date=None, parent_task_id=None, estimated_hours=None):
         """创建任务"""
-        sql = """INSERT INTO tasks (user_id, course_id, title, description, task_type, priority, due_date, parent_task_id)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)"""
-        return db.insert(sql, (user_id, course_id, title, description, task_type, priority, due_date, parent_task_id))
+        sql = """INSERT INTO tasks (user_id, course_id, title, description, task_type, priority, due_date, parent_task_id, estimated_hours)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"""
+        return db.insert(sql, (user_id, course_id, title, description, task_type, priority, due_date, parent_task_id, estimated_hours))
 
     @staticmethod
     def find_by_id(task_id):
@@ -44,7 +44,7 @@ class Task:
     @staticmethod
     def update(task_id, **kwargs):
         """更新任务"""
-        allowed_fields = {'title', 'description', 'task_type', 'priority', 'due_date', 'status', 'course_id'}
+        allowed_fields = {'title', 'description', 'task_type', 'priority', 'due_date', 'status', 'course_id', 'estimated_hours'}
         updates = []
         values = []
 
