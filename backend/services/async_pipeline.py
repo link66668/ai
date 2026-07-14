@@ -458,14 +458,18 @@ class AsyncPipeline:
         db.delete("DELETE FROM document_chunks WHERE document_id = ?", (doc_id,))
         db.delete("DELETE FROM document_processing_log WHERE document_id = ?", (doc_id,))
 
-        # 清理旧的 MinerU .md 文件
+        # 清理旧的 .md 及 MinerU 中间文件
         md_path = doc.get('md_path', '')
         if md_path and os.path.exists(md_path):
             os.remove(md_path)
-            # 清理空 images/ 目录
             images_dir = os.path.join(os.path.dirname(md_path), 'images')
             if os.path.isdir(images_dir) and not os.listdir(images_dir):
                 os.rmdir(images_dir)
+        # 清理 SDK 中间文件
+        output_dir = os.path.dirname(md_path) if md_path else ''
+        if output_dir and os.path.isdir(output_dir):
+            from services.mineru_service import MinerUService
+            MinerUService._cleanup_sdk_tempfiles(output_dir)
         Document.update_processing(doc_id, md_path='')
 
         # 重置状态

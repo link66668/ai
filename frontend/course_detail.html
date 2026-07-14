@@ -324,6 +324,19 @@
             }
         }
 
+        // 处理阶段 → 中文描述
+        const STAGE_LABELS = {
+            'pending':   '等待处理',
+            'parsing':   '正在解析文档',
+            'mineru':    'MinerU 转换中',
+            'ocr':       '正在识别图片',
+            'layout':    '正在分析版面',
+            'extract':   '正在提取结构',
+            'chunking':  '正在分块',
+            'embedding': '正在向量化',
+            'indexing':  '正在建索引',
+        };
+
         function renderDocs(docs) {
             const container = document.getElementById('docList');
             if (!docs.length) {
@@ -332,24 +345,24 @@
             }
 
             container.innerHTML = docs.map(doc => {
-                // 处理状态UI
                 let statusHtml = '';
                 const status = doc.processing_status || 'pending';
                 if (status === 'completed') {
                     statusHtml = '<span class="badge badge-success">已索引</span>';
                 } else if (status === 'failed') {
-                    statusHtml = `<span class="badge badge-danger" title="${doc.processing_error || ''}">处理失败</span>
+                    const errMsg = doc.processing_error || '';
+                    const shortErr = errMsg.length > 40 ? errMsg.slice(0, 40) + '...' : errMsg;
+                    statusHtml = `<span class="badge badge-danger" title="${errMsg}">处理失败</span>
                         <button class="btn btn-sm btn-outline" onclick="reprocessDoc(${doc.id})" style="margin-top:4px;">重试</button>`;
-                } else if (status === 'pending' || status === 'parsing' || status === 'ocr' ||
-                           status === 'layout' || status === 'extract' ||
-                           status === 'chunking' || status === 'embedding' || status === 'indexing') {
+                } else {
+                    const label = STAGE_LABELS[status] || '处理中';
                     const pct = Math.round((doc.processing_progress || 0) * 100);
-                    statusHtml = `<span class="badge badge-info">处理中 ${pct}%</span>
+                    statusHtml = `<span class="badge badge-info">${label} ${pct}%</span>
                         <div class="upload-progress"><div class="upload-progress-bar" style="width:${pct}%"></div></div>`;
                 }
 
                 return `
-                <div class="doc-card">
+                <div class="doc-card" data-doc-id="${doc.id}">
                     <div class="doc-icon ${getFileIcon(doc.file_type)}">${getFileEmoji(doc.file_type)}</div>
                     <div class="doc-info">
                         <div class="doc-name" title="${doc.original_name}">${doc.original_name}</div>
@@ -380,11 +393,24 @@
                 try {
                     const result = await api.getDocumentProcessing(docId);
                     const progress = result.data;
-                    if (progress.status === 'completed' || progress.status === 'failed') {
+                    const status = progress.status || '';
+
+                    if (status === 'completed' || status === 'failed') {
                         clearInterval(pollingTimers[docId]);
                         delete pollingTimers[docId];
-                        // 重新加载文档列表
                         loadDocuments();
+                        return;
+                    }
+
+                    // 实时更新进度条和阶段描述（data-doc-id 查找，无需重绘整个列表）
+                    const docCard = document.querySelector(`#docList .doc-card[data-doc-id="${docId}"]`);
+                    if (docCard) {
+                        const badge = docCard.querySelector('.badge');
+                        const bar = docCard.querySelector('.upload-progress-bar');
+                        const label = STAGE_LABELS[status] || '处理中';
+                        const pct = Math.round((progress.progress || 0) * 100);
+                        if (badge) badge.textContent = `${label} ${pct}%`;
+                        if (bar) bar.style.width = `${pct}%`;
                     }
                 } catch (e) {
                     clearInterval(pollingTimers[docId]);

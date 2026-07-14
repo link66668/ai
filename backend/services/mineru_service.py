@@ -258,17 +258,13 @@ class MinerUService:
         return self._save_markdown_result(markdown_text, output_dir, doc_name)
 
     def _save_markdown_result(self, markdown_text, output_dir, doc_name=None):
-        """保存 Markdown 文本到文件"""
+        """保存 Markdown 文本到文件（覆盖已存在的文件）"""
         if not markdown_text or not markdown_text.strip():
             raise ValueError('MinerU 返回空 Markdown')
 
         # 生成文件名
         safe_name = self._safe_filename(doc_name or 'document')
         md_path = os.path.join(output_dir, f'{safe_name}.md')
-
-        # 处理重名
-        if os.path.exists(md_path):
-            md_path = os.path.join(output_dir, f'{safe_name}_{int(time.time())}.md')
 
         # 如果模型返回 HTML（MinerU-HTML），转为 Markdown
         if self._looks_like_html(markdown_text):
@@ -282,6 +278,9 @@ class MinerUService:
 
         logger.info(f"[MinerU] 已保存: {md_path} ({len(markdown_text)} 字符, {image_count} 张图片引用)")
 
+        # 清理 SDK 生成的中间文件（如 {uuid}_origin.pdf, {uuid}_*.json）
+        self._cleanup_sdk_tempfiles(output_dir, safe_name)
+
         return {
             'markdown_text': markdown_text,
             'md_file_path': md_path,
@@ -291,6 +290,25 @@ class MinerUService:
                 'page_count': markdown_text.count('\n---\n') + 1 or 1,
             },
         }
+
+    @staticmethod
+    def _cleanup_sdk_tempfiles(output_dir, doc_name=''):
+        """清理 MinerU SDK 生成的中间文件"""
+        import glob as _glob
+        for pattern in ('*_origin.pdf', '*_content_list.json', '*_content_list_v2.json', '*_model.json'):
+            for fp in _glob.glob(os.path.join(output_dir, pattern)):
+                try:
+                    os.remove(fp)
+                except OSError:
+                    pass
+
+        # 清理空目录下的 full.md（SDK 生成的默认文件名，与规范命名重复）
+        full_md = os.path.join(output_dir, 'full.md')
+        if os.path.exists(full_md):
+            try:
+                os.remove(full_md)
+            except OSError:
+                pass
 
     def _extract_zip_result(self, zip_bytes, output_dir, doc_name=None):
         """解压 MinerU 返回的 ZIP 结果"""
@@ -323,10 +341,8 @@ class MinerUService:
         # 修复图片路径为相对路径
         markdown_text = self._fix_image_paths(markdown_text, images_dir)
 
-        # 保存 Markdown 文件
+        # 保存 Markdown 文件（覆盖已存在的文件）
         md_path = os.path.join(output_dir, f'{safe_name}.md')
-        if os.path.exists(md_path):
-            md_path = os.path.join(output_dir, f'{safe_name}_{int(time.time())}.md')
 
         with open(md_path, 'w', encoding='utf-8') as f:
             f.write(markdown_text)

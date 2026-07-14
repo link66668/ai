@@ -69,9 +69,11 @@ def upload_document(current_user):
     ext = original_name.rsplit('.', 1)[1].lower() if '.' in original_name else ''
     filename = f"{uuid.uuid4().hex}.{ext}" if ext else uuid.uuid4().hex
 
-    # 确保上传目录存在
-    os.makedirs(Config.UPLOAD_FOLDER, exist_ok=True)
-    file_path = os.path.join(Config.UPLOAD_FOLDER, filename)
+    # 按课程目录组织源文件：uploads/{课程名}/source/{uuid}.{ext}
+    safe_course = re.sub(r'[\\/:*?"<>|]', '_', course['name']).strip() or 'unnamed'
+    source_dir = os.path.join(Config.UPLOAD_FOLDER, safe_course, 'source')
+    os.makedirs(source_dir, exist_ok=True)
+    file_path = os.path.join(source_dir, filename)
     file.save(file_path)
 
     # 获取文件信息
@@ -177,22 +179,41 @@ def delete_document(current_user, doc_id):
     if not course or course['user_id'] != current_user['id']:
         return error_response('无权访问', 403)
 
-    # 删除物理文件
+    # 删除原始上传文件（按课程目录组织后，可能在 source/ 子目录下）
     if os.path.exists(doc['file_path']):
         os.remove(doc['file_path'])
+        # 尝试清理空的 source/ 目录
+        source_dir = os.path.dirname(doc['file_path'])
+        if os.path.isdir(source_dir) and not os.listdir(source_dir):
+            try:
+                os.rmdir(source_dir)
+            except OSError:
+                pass
 
-    # 删除 MinerU 生成的 .md 和图片
+    # 删除 MinerU 生成的 .md 和中间文件
     md_path = doc.get('md_path', '')
-    if md_path and os.path.exists(md_path):
-        os.remove(md_path)
+    if md_path:
+        output_dir = os.path.dirname(md_path)
+        if os.path.exists(md_path):
+            os.remove(md_path)
+        # 清理 MinerU SDK 中间文件
+        if output_dir and os.path.isdir(output_dir):
+            from services.mineru_service import MinerUService
+            MinerUService._cleanup_sdk_tempfiles(output_dir)
         # 清理空 images/ 目录
-        images_dir = os.path.join(os.path.dirname(md_path), 'images')
-        if os.path.isdir(images_dir) and not os.listdir(images_dir):
-            os.rmdir(images_dir)
+        images_dir = os.path.join(output_dir, 'images') if output_dir else ''
+        if images_dir and os.path.isdir(images_dir) and not os.listdir(images_dir):
+            try:
+                os.rmdir(images_dir)
+            except OSError:
+                pass
         # 清理空课程目录
-        course_dir = os.path.dirname(md_path)
-        if os.path.isdir(course_dir) and not os.listdir(course_dir):
-            os.rmdir(course_dir)
+        course_dir = output_dir or ''
+        if course_dir and os.path.isdir(course_dir) and not os.listdir(course_dir):
+            try:
+                os.rmdir(course_dir)
+            except OSError:
+                pass
 
     course_id = doc['course_id']
 
