@@ -742,6 +742,10 @@
                     localStorage.setItem('roadmap_daily_hours', dailyHours);
                 }
                 renderDecomposeResult();
+                // LLM 不可用时提示用户
+                if (resp.data?.llm_warning) {
+                    showToast('大模型未配置：' + resp.data.llm_warning + '，已使用模板化方案生成', 'warning', 6000);
+                }
             } catch (error) {
                 showToast('拆解失败：' + (error.message || '服务异常'), 'error');
             } finally {

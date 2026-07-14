@@ -90,12 +90,10 @@ def decompose_task(current_user):
     ai_config = UserAIConfig.get_effective_config(current_user['id'])
 
     ok, err_msg = ai_service._verify_llm_available(ai_config=ai_config)
-    if not ok:
-        return error_response(err_msg)
-
-    is_valid, course_feedback = ai_service._validate_is_course(task_title, ai_config=ai_config)
-    if not is_valid:
-        return error_response(course_feedback)
+    if ok:
+        is_valid, course_feedback = ai_service._validate_is_course(task_title, ai_config=ai_config)
+        if not is_valid:
+            return error_response(course_feedback)
 
     import re
     _route_aliases = {
@@ -131,4 +129,7 @@ def decompose_task(current_user):
     task_title = remaining.strip()
 
     result = ai_service.decompose_task(task_title, description, total_days, ai_config=ai_config, daily_hours=daily_hours, user_id=current_user['id'])
-    return success_response({'subtasks': result, 'daily_hours': daily_hours if daily_hours > 0 else None})
+    resp_data = {'subtasks': result, 'daily_hours': daily_hours if daily_hours > 0 else None}
+    if not ok:
+        resp_data['llm_warning'] = err_msg
+    return success_response(resp_data)
