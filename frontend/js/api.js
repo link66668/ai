@@ -272,6 +272,14 @@ class ApiClient {
         return this.post('/agent/extract-knowledge', { text });
     }
 
+    // 知识点整理
+    organizeKnowledge(courseId, type = 'points') {
+        return this.post('/agent/knowledge-organize', { course_id: courseId, type });
+    }
+    getStoredKnowledge(courseId, type = 'points') {
+        return this.get('/agent/knowledge-organize', { course_id: courseId, type });
+    }
+
     // ========== 流式 + 临时文件 + 中断 ==========
 
     /**

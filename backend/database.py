@@ -219,6 +219,23 @@ class Database:
             except sqlite3.OperationalError:
                 pass  # 列已存在
 
+            # 2. course_knowledge 表（知识点整理缓存）
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS course_knowledge (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    course_id INTEGER NOT NULL,
+                    type TEXT NOT NULL CHECK(type IN ('points', 'outline')),
+                    content TEXT,
+                    source_count INTEGER DEFAULT 0,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE
+                )
+            ''')
+            cursor.execute('''
+                CREATE INDEX IF NOT EXISTS idx_course_knowledge_course
+                ON course_knowledge(course_id, type)
+            ''')
+
             conn.commit()
         except Exception as e:
             print(f"[数据库初始化错误] {e}")

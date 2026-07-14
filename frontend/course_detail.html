@@ -85,6 +85,9 @@
                         <div class="tab-item active" data-tab="docs">课程资料</div>
                         <div class="tab-item" data-tab="kb">📚 知识库</div>
                         <div class="tab-item" data-tab="tasks">相关任务</div>
+                        <span class="tab-sep">|</span>
+                        <div class="tab-item" data-tab="points">🏷️ 知识点清单</div>
+                        <div class="tab-item" data-tab="outline">📝 复习提纲</div>
                     </div>
 
                     <!-- 资料面板 -->
@@ -130,6 +133,44 @@
                         <ul class="task-list" id="taskList">
                             <div class="empty-state"><p>暂无任务</p></div>
                         </ul>
+                    </div>
+
+                    <!-- 知识点清单面板 -->
+                    <div id="pointsPanel" class="hidden">
+                        <div class="kb-panel-header">
+                            <strong id="pointsTitle"></strong>
+                            <span class="text-muted" id="pointsSource" style="font-size:12px;"></span>
+                            <span style="margin-left:auto;"></span>
+                            <button class="btn btn-sm btn-outline" onclick="showKnowledgeTab('points', true)" id="btnPointsRegen" style="font-size:12px;">🔄 重新生成</button>
+                        </div>
+                        <div id="pointsLoading" style="display:none;text-align:center;padding:30px;">
+                            <div class="spinner"></div>
+                            <p style="margin-top:8px;color:var(--gray-500);font-size:14px;">AI 正在分析课程资料...</p>
+                        </div>
+                        <div id="pointsContent" class="kb-result-content"></div>
+                        <div id="pointsEmpty" class="empty-state" style="display:none;">
+                            <p>暂无知识点清单，请先上传课程资料。</p>
+                            <p class="text-muted" style="font-size:13px;">上传资料并处理完成后，知识点清单将自动生成。</p>
+                        </div>
+                    </div>
+
+                    <!-- 复习提纲面板 -->
+                    <div id="outlinePanel" class="hidden">
+                        <div class="kb-panel-header">
+                            <strong id="outlineTitle"></strong>
+                            <span class="text-muted" id="outlineSource" style="font-size:12px;"></span>
+                            <span style="margin-left:auto;"></span>
+                            <button class="btn btn-sm btn-outline" onclick="showKnowledgeTab('outline', true)" id="btnOutlineRegen" style="font-size:12px;">🔄 重新生成</button>
+                        </div>
+                        <div id="outlineLoading" style="display:none;text-align:center;padding:30px;">
+                            <div class="spinner"></div>
+                            <p style="margin-top:8px;color:var(--gray-500);font-size:14px;">AI 正在分析课程资料...</p>
+                        </div>
+                        <div id="outlineContent" class="kb-result-content"></div>
+                        <div id="outlineEmpty" class="empty-state" style="display:none;">
+                            <p>暂无复习提纲，请先上传课程资料。</p>
+                            <p class="text-muted" style="font-size:13px;">上传资料并处理完成后，复习提纲将自动生成。</p>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -606,23 +647,97 @@
             window.location.href = `/chat.html?course_id=${courseId}`;
         }
 
-        // 标签页切换
+        // ==================== 5个标签页切换 ====================
+        const TAB_PANELS = ['docs', 'kb', 'tasks', 'points', 'outline'];
+        let kbLoaded = false;
+        let knowledgeLoaded = {};  // { 'points': bool, 'outline': bool }
+        let knowledgeCache = {};   // { 'points': data, 'outline': data }
+
         document.querySelectorAll('.tab-item').forEach(tab => {
             tab.addEventListener('click', () => {
+                const tabName = tab.dataset.tab;
+                if (!tabName) return;
+
+                // 切换 active 样式
                 document.querySelectorAll('.tab-item').forEach(t => t.classList.remove('active'));
                 tab.classList.add('active');
-                const tabName = tab.dataset.tab;
-                document.getElementById('docsPanel').classList.toggle('hidden', tabName !== 'docs');
-                document.getElementById('kbPanel').classList.toggle('hidden', tabName !== 'kb');
-                document.getElementById('tasksPanel').classList.toggle('hidden', tabName !== 'tasks');
+
+                // 显示/隐藏面板
+                TAB_PANELS.forEach(name => {
+                    const panel = document.getElementById(name + 'Panel');
+                    if (panel) panel.classList.toggle('hidden', name !== tabName);
+                });
+
+                // 延迟加载
                 if (tabName === 'kb' && !kbLoaded) {
                     loadKnowledgeBase();
                     kbLoaded = true;
                 }
+                if ((tabName === 'points' || tabName === 'outline') && !knowledgeLoaded[tabName]) {
+                    showKnowledgeTab(tabName);
+                    knowledgeLoaded[tabName] = true;
+                }
             });
         });
 
-        let kbLoaded = false;
+        // ==================== 知识点整理 ====================
+
+        window.showKnowledgeTab = async function(type, forceRegenerate = false) {
+            const loading = document.getElementById(type + 'Loading');
+            const content = document.getElementById(type + 'Content');
+            const empty = document.getElementById(type + 'Empty');
+            const title = document.getElementById(type + 'Title');
+            const source = document.getElementById(type + 'Source');
+
+            loading.style.display = 'block';
+            content.style.display = 'none';
+            empty.style.display = 'none';
+            title.textContent = type === 'points' ? '⏳ 生成知识点清单...' : '⏳ 生成复习提纲...';
+            source.textContent = '';
+
+            try {
+                let data = null;
+                if (!forceRegenerate && knowledgeCache[type]) {
+                    data = knowledgeCache[type];
+                } else {
+                    // 60秒超时保护
+                    const timeoutPromise = new Promise((_, reject) =>
+                        setTimeout(() => reject(new Error('请求超时，请检查 AI 配置或网络连接')), 60000)
+                    );
+                    const res = await Promise.race([
+                        api.organizeKnowledge(courseId, type),
+                        timeoutPromise
+                    ]);
+                    data = res.data;
+                    knowledgeCache[type] = data;
+                }
+
+                title.textContent = data.title;
+                source.textContent = `基于 ${data.source_count} 篇课程资料`;
+                content.innerHTML = markedToHtml(data.content);
+                loading.style.display = 'none';
+                content.style.display = 'block';
+            } catch (e) {
+                showToast('知识点整理失败: ' + (e.message || e), 'error');
+                loading.style.display = 'none';
+                empty.style.display = 'block';
+                title.textContent = type === 'points' ? '知识点清单' : '复习提纲';
+                source.textContent = '生成失败';
+                console.error('[Knowledge]', e);
+            }
+        }
+
+        // 页面加载时提前获取缓存
+        async function preloadKnowledge() {
+            for (const t of ['points', 'outline']) {
+                try {
+                    const res = await api.getStoredKnowledge(courseId, t);
+                    if (res.data && res.data.available) {
+                        knowledgeCache[t] = res.data;
+                    }
+                } catch (_) {}
+            }
+        }
 
         // 加载知识库
         async function loadKnowledgeBase() {
@@ -701,6 +816,7 @@
         loadCourse();
         loadDocs();
         loadTasks();
+        preloadKnowledge();
     </script>
 </body>
 </html>

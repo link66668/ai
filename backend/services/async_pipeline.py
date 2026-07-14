@@ -98,6 +98,13 @@ class AsyncPipeline:
                 self._log_stage(doc_id, 'completed', 'success',
                                 f'处理完成: {doc["original_name"]}')
                 print(f"[Pipeline] 文档 {doc_id} 处理完成")
+
+                # 自动触发知识点整理（后台静默执行）
+                try:
+                    from services.knowledge_service import knowledge_service
+                    knowledge_service.auto_generate_if_needed(course_id, ai_config)
+                except Exception as e:
+                    logger.warning(f"[Pipeline] 触发知识点整理失败: {e}")
                 return
             except Exception as e:
                 retry_count += 1

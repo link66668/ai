@@ -68,6 +68,52 @@ def extract_knowledge(current_user):
     points = ai_service.extract_knowledge_points(text)
     return success_response({'knowledge_points': points})
 
+@agent_bp.route('/knowledge-organize', methods=['GET', 'POST'])
+@token_required
+def knowledge_organize(current_user):
+    """
+    知识点整理：
+      GET  — 获取缓存结果
+      POST — 重新生成（覆盖缓存）
+    """
+    from services.knowledge_service import knowledge_service
+    from models.course import Course
+    from models.user_ai_config import UserAIConfig
+
+    if request.method == 'GET':
+        course_id = request.args.get('course_id', type=int)
+        organize_type = request.args.get('type', 'points')
+    else:
+        data = request.get_json()
+        if not data:
+            return error_response('请求数据为空')
+        course_id = data.get('course_id')
+        organize_type = data.get('type', 'points')
+
+    if not course_id:
+        return error_response('课程 ID 不能为空')
+
+    if organize_type not in ('points', 'outline'):
+        return error_response('type 参数无效，应为 points 或 outline')
+
+    # 校验课程权限
+    course = Course.find_by_id(course_id)
+    if not course or course['user_id'] != current_user['id']:
+        return error_response('无权访问该课程', 403)
+
+    if request.method == 'GET':
+        # 获取缓存结果
+        result = knowledge_service.get_stored_knowledge(course_id, organize_type)
+        if result is None:
+            return success_response({'available': False, 'title': '', 'content': '', 'source_count': 0})
+        result['available'] = True
+        return success_response(result)
+
+    # POST：重新生成
+    ai_config = UserAIConfig.get_effective_config(current_user['id'])
+    result = knowledge_service.organize_knowledge(course_id, organize_type, ai_config=ai_config)
+    return success_response(result)
+
 @agent_bp.route('/decompose-task', methods=['POST'])
 @token_required
 def decompose_task(current_user):
