@@ -801,9 +801,38 @@
             }
         }
 
-        // 预览知识库文件 — 同 previewDoc
+        // 预览知识库 Markdown 文件
         async function previewMarkdown(docId, name) {
-            previewDoc(docId);
+            try {
+                const res = await api.getDocumentMarkdown(docId);
+                const content = res.data.content;
+                const w = window.open('', '_blank', 'width=800,height=600');
+                w.document.write(`<html><head><title>${name} - 知识库预览</title>
+                    <style>body{font-family:system-ui;max-width:800px;margin:40px auto;padding:0 20px;line-height:1.6;color:#333;}
+                    pre{background:#f5f5f5;padding:12px;border-radius:6px;overflow-x:auto;}
+                    table{border-collapse:collapse;width:100%;}td,th{border:1px solid #ddd;padding:8px;}
+                    h1,h2,h3{color:#1a1a1a;}</style></head>
+                    <body><h1>${name}</h1><hr>${markedToHtml(content)}</body></html>`);
+                w.document.close();
+            } catch (e) {
+                alert('预览失败: ' + (e.message || e));
+            }
+        }
+
+        // 简易 Markdown → HTML
+        function markedToHtml(md) {
+            if (!md) return '';
+            return md
+                .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+                .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+                .replace(/^# (.+)$/gm, '<h1>$1</h1>')
+                .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+                .replace(/\*(.+?)\*/g, '<em>$1</em>')
+                .replace(/`(.+?)`/g, '<code>$1</code>')
+                .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1" style="max-width:100%;">')
+                .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>')
+                .replace(/\n\n/g, '</p><p>')
+                .replace(/\n/g, '<br>');
         }
 
         // 初始化
