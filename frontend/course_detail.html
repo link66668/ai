@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>课程详情 - 课程学习助手</title>
     <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
 </head>
 <body>
     <div class="page-wrapper">
@@ -272,6 +273,7 @@
 
     <script src="js/api.js"></script>
     <script src="js/utils.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
     <script>
         if (!checkAuth()) throw new Error('未登录');
 
@@ -801,17 +803,24 @@
             }
         }
 
-        // 预览知识库 Markdown 文件
+        // 预览知识库 Markdown 文件（含 LaTeX 渲染）
         async function previewMarkdown(docId, name) {
             try {
                 const res = await api.getDocumentMarkdown(docId);
                 const content = res.data.content;
-                const w = window.open('', '_blank', 'width=800,height=600');
+                const w = window.open('', '_blank', 'width=900,height=700');
                 w.document.write(`<html><head><title>${name} - 知识库预览</title>
-                    <style>body{font-family:system-ui;max-width:800px;margin:40px auto;padding:0 20px;line-height:1.6;color:#333;}
-                    pre{background:#f5f5f5;padding:12px;border-radius:6px;overflow-x:auto;}
-                    table{border-collapse:collapse;width:100%;}td,th{border:1px solid #ddd;padding:8px;}
-                    h1,h2,h3{color:#1a1a1a;}</style></head>
+                    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+                    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js" defer><\/script>
+                    <style>
+                        body{font-family:system-ui,'PingFang SC','Microsoft YaHei',sans-serif;max-width:800px;margin:40px auto;padding:0 20px;line-height:1.8;color:#1a1a1a;font-size:15px;}
+                        pre{background:#f5f5f5;padding:12px;border-radius:6px;overflow-x:auto;}
+                        table{border-collapse:collapse;width:100%;}td,th{border:1px solid #ddd;padding:8px;}
+                        h1,h2,h3{color:#111;margin-top:24px;margin-bottom:12px;}
+                        p{margin:8px 0;}
+                        img{max-width:100%;}
+                        .katex{font-size:1.05em;}
+                    </style></head>
                     <body><h1>${name}</h1><hr>${markedToHtml(content)}</body></html>`);
                 w.document.close();
             } catch (e) {
@@ -819,10 +828,30 @@
             }
         }
 
-        // 简易 Markdown → HTML
+        // Markdown → HTML（含 LaTeX 渲染）
         function markedToHtml(md) {
             if (!md) return '';
-            return md
+
+            // 1. 保护 LaTeX 数学公式（显示公式 $$...$$ 和行内公式 $...$）
+            const mathBlocks = [];
+            const inlineMath = [];
+            let idx = 0;
+
+            // 先提取显示公式 $$...$$
+            md = md.replace(/\$\$([\s\S]*?)\$\$/g, (_, formula) => {
+                const key = '%%MATHBLOCK_' + (idx++) + '%%';
+                mathBlocks.push(formula.trim());
+                return key;
+            });
+            // 再提取行内公式 $...$（确保不匹配已经被替换的占位符）
+            md = md.replace(/\$(.+?)\$/g, (_, formula) => {
+                const key = '%%INLINEMATH_' + (idx++) + '%%';
+                inlineMath.push(formula.trim());
+                return key;
+            });
+
+            // 2. Markdown 渲染
+            let html = md
                 .replace(/^### (.+)$/gm, '<h3>$1</h3>')
                 .replace(/^## (.+)$/gm, '<h2>$1</h2>')
                 .replace(/^# (.+)$/gm, '<h1>$1</h1>')
@@ -833,6 +862,30 @@
                 .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>')
                 .replace(/\n\n/g, '</p><p>')
                 .replace(/\n/g, '<br>');
+
+            // 3. 还原 LaTeX 公式（用 KaTeX 渲染）
+            function renderLatex(formula, displayMode) {
+                try {
+                    if (window.katex) {
+                        return window.katex.renderToString(formula, {
+                            throwOnError: false,
+                            displayMode: displayMode,
+                        });
+                    }
+                } catch (_) {}
+                // KaTeX 未加载或渲染失败时保留原始公式
+                const delim = displayMode ? '$$' : '$';
+                return delim + formula + delim;
+            }
+
+            html = html.replace(/%%MATHBLOCK_(\d+)%%/g, (_, n) => {
+                return renderLatex(mathBlocks[parseInt(n)], true);
+            });
+            html = html.replace(/%%INLINEMATH_(\d+)%%/g, (_, n) => {
+                return renderLatex(inlineMath[parseInt(n)], false);
+            });
+
+            return html;
         }
 
         // 初始化
