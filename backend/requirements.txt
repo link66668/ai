@@ -43,7 +43,7 @@ openai>=1.12.0             # DeepSeek API + MaaS 嵌入/视觉（OpenAI兼容）
 cryptography>=42.0.0       # 临时文件加密
 
 # MinerU 文档转换（可选，仅 Cloud SDK 模式需要；REST API 模式仅需 requests）
-# mineru-open-sdk>=0.1.0
+mineru-open-sdk>=0.1.0
 
 # 注意：
 # 1. tiktoken 需要 Rust 编译器，在 Python 3.13 上可能安装失败

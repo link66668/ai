@@ -75,10 +75,23 @@ class MinerUService:
         os.makedirs(output_dir, exist_ok=True)
 
         # 选择后端
-        if doc_url:
+        # 官方地址(https://mineru.net / https://mineru.com.cn) 不走 REST，
+        # 它们不是 API 端点，需要走 SDK 模式
+        OFFICIAL_SITES = {'https://mineru.net', 'https://mineru.com.cn'}
+        base_clean = doc_url.rstrip('/')
+        is_official_site = base_clean in OFFICIAL_SITES
+
+        if doc_url and not is_official_site and doc_key:
+            # 自定义自建服务 → REST 模式
+            result = self._convert_via_rest(file_path, doc_url, doc_key, output_dir, doc_name)
+        elif doc_key:
+            # 有 API Key → SDK 模式（官方推荐）
+            result = self._convert_via_sdk(file_path, doc_key, doc_model, output_dir, doc_name)
+        elif doc_url and not is_official_site:
+            # 仅有自定义 URL（无 Key）→ 尝试 REST
             result = self._convert_via_rest(file_path, doc_url, doc_key, output_dir, doc_name)
         else:
-            result = self._convert_via_sdk(file_path, doc_key, doc_model, output_dir, doc_name)
+            raise ValueError('请配置 MinerU API Key（SDK 模式）或自建服务地址（REST 模式）')
 
         return result
 
