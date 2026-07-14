@@ -561,11 +561,9 @@ class AsyncPipeline:
         return {'headings': headings, 'toc_tree': []}
 
     def _save_text_as_markdown(self, text, output_dir, doc_name):
-        """将解析文本保存为 .md 文件到知识库目录"""
+        """将解析文本保存为 .md 文件到知识库目录（覆盖已存在文件）"""
         safe_name = re.sub(r'[\\/:*?"<>|]', '_', doc_name).strip() or 'document'
         md_path = os.path.join(output_dir, f'{safe_name}.md')
-        if os.path.exists(md_path):
-            md_path = os.path.join(output_dir, f'{safe_name}_{int(time.time())}.md')
         with open(md_path, 'w', encoding='utf-8') as f:
             f.write(text)
         return md_path

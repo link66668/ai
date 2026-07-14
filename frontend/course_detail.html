@@ -298,6 +298,7 @@
                     statusHtml = `<span class="badge badge-danger" title="${doc.processing_error || ''}">处理失败</span>
                         <button class="btn btn-sm btn-outline" onclick="reprocessDoc(${doc.id})" style="margin-top:4px;">重试</button>`;
                 } else if (status === 'pending' || status === 'parsing' || status === 'ocr' ||
+                           status === 'layout' || status === 'extract' ||
                            status === 'chunking' || status === 'embedding' || status === 'indexing') {
                     const pct = Math.round((doc.processing_progress || 0) * 100);
                     statusHtml = `<span class="badge badge-info">处理中 ${pct}%</span>
