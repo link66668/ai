@@ -471,17 +471,40 @@
 
         // 预览资料
         async function previewDoc(id) {
-            const doc = allDocs.find(d => d.id === id);
-            if (!doc) return;
+            try {
+                const doc = allDocs.find(d => d.id === id);
+                const fileType = (doc && doc.file_type || '').toLowerCase();
+                const officeTypes = ['pptx', 'docx', 'xlsx', 'ppt', 'doc', 'xls'];
+                const token = localStorage.getItem('token');
 
-            if (doc.file_type === 'txt' && doc.content_text) {
-                // 文本预览 - 在新窗口打开
-                const w = window.open('', '_blank');
-                w.document.write(`<html><head><title>${doc.original_name}</title>
-                    <style>body{font-family:sans-serif;padding:40px;max-width:800px;margin:0 auto;line-height:1.8;}</style>
-                </head><body><h2>${doc.original_name}</h2><pre style="white-space:pre-wrap;">${doc.content_text}</pre></body></html>`);
-            } else {
-                window.open(`/api/documents/${id}/preview`, '_blank');
+                if (officeTypes.includes(fileType)) {
+                    // Office 文档 → 后端用系统默认应用直接打开
+                    const resp = await fetch(`/api/documents/${id}/open`, {
+                        method: 'POST',
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    const data = await resp.json();
+                    if (resp.ok) {
+                        showToast('正在用默认应用打开文件…', 'success');
+                    } else {
+                        showToast(data.msg || '打开失败', 'error');
+                    }
+                } else {
+                    // PDF / 图片 / txt → 浏览器原生渲染
+                    const resp = await fetch(`/api/documents/${id}/raw`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    if (!resp.ok) {
+                        const err = await resp.json().catch(() => ({}));
+                        showToast(err.msg || '预览失败', 'error');
+                        return;
+                    }
+                    const blob = await resp.blob();
+                    const url = URL.createObjectURL(blob);
+                    window.open(url, '_blank');
+                }
+            } catch (e) {
+                showToast('预览失败: ' + (e.message || e), 'error');
             }
         }
 
@@ -662,38 +685,9 @@
             }
         }
 
-        // 预览 Markdown
+        // 预览知识库文件 — 同 previewDoc
         async function previewMarkdown(docId, name) {
-            try {
-                const res = await api.getDocumentMarkdown(docId);
-                const content = res.data.content;
-                // 简单弹窗预览
-                const w = window.open('', '_blank', 'width=800,height=600');
-                w.document.write(`<html><head><title>${name} - 知识库预览</title>
-                    <style>body{font-family:system-ui;max-width:800px;margin:40px auto;padding:0 20px;line-height:1.6;color:#333;}
-                    pre{background:#f5f5f5;padding:12px;border-radius:6px;overflow-x:auto;}
-                    table{border-collapse:collapse;width:100%;}td,th{border:1px solid #ddd;padding:8px;}
-                    h1,h2,h3{color:#1a1a1a;}</style></head>
-                    <body><h1>${name}</h1><hr>${markedToHtml(content)}</body></html>`);
-                w.document.close();
-            } catch (e) {
-                alert('预览失败: ' + (e.message || e));
-            }
-        }
-
-        // 简易 Markdown → HTML
-        function markedToHtml(md) {
-            return md
-                .replace(/^### (.+)$/gm, '<h3>$1</h3>')
-                .replace(/^## (.+)$/gm, '<h2>$1</h2>')
-                .replace(/^# (.+)$/gm, '<h1>$1</h1>')
-                .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-                .replace(/\*(.+?)\*/g, '<em>$1</em>')
-                .replace(/`(.+?)`/g, '<code>$1</code>')
-                .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1" style="max-width:100%;">')
-                .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>')
-                .replace(/\n\n/g, '</p><p>')
-                .replace(/\n/g, '<br>');
+            previewDoc(docId);
         }
 
         // 初始化
