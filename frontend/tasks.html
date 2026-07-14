@@ -491,6 +491,15 @@
         .roadmap-day-hrs-label.over {
             color: #ef4444; font-weight: 600;
         }
+
+        /* ====== 每日小时独立设置 ====== */
+        .daily-hours-widget { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; background: var(--gray-50); border: 1px solid var(--gray-200); border-radius: 10px; transition: border .2s,box-shadow .2s; }
+        .daily-hours-widget:hover { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(79,70,229,.06); }
+        .dhw-label { font-size: 12px; color: var(--gray-500); white-space: nowrap; font-weight: 500; }
+        .dhw-unit { font-size: 12px; color: var(--gray-400); }
+        .daily-hours-widget input[type="number"] { width: 48px; padding: 4px 6px; border: none; background: transparent; font-size: 14px; font-weight: 700; color: var(--primary); text-align: center; outline: none; -moz-appearance: textfield; }
+        .daily-hours-widget input[type="number"]::-webkit-inner-spin-button,
+        .daily-hours-widget input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; }
     </style>
 </head>
 <body>
@@ -524,6 +533,11 @@
                     </div>
                 </div>
                 <div class="topbar-actions">
+                    <div class="daily-hours-widget" title="每天可用学习时间，用于路线图超时检测和任务拆解">
+                        <span class="dhw-label">🕐 每日</span>
+                        <input type="number" id="sdDailyHours" value="2" min="0.5" max="12" step="0.5" onchange="askSaveDailyHours()">
+                        <span class="dhw-unit">小时</span>
+                    </div>
                     <button class="btn btn-primary" onclick="showCreateModal()">+ 新建任务</button>
                 </div>
             </div>
@@ -537,11 +551,6 @@
                 <div class="dp-body">
                     <div class="dp-input-row">
                         <textarea id="sdGoalInput" placeholder="描述你的学习目标，系统自动拆解&#10;例如：两周复习完高等数学期末考试&#10;例如：两周内复习完高等数学和大学英语&#10;例如：一个月学完 Python 和数据结构，每天 3 小时"></textarea>
-                        <div class="dp-hours-box">
-                            <label class="dp-hours-label">每日</label>
-                            <input type="number" id="sdDailyHours" value="2" min="0.5" max="12" step="0.5" title="每天可用学习时间（小时）">
-                            <span>小时</span>
-                        </div>
                         <button class="btn btn-primary btn-decompose" onclick="smartDecompose()" id="sdBtn">🔍 拆解</button>
                     </div>
                     <div class="dp-hint">
@@ -672,6 +681,25 @@
             <div class="modal-footer">
                 <button class="btn btn-secondary" onclick="closeModal()">取消</button>
                 <button class="btn btn-primary" onclick="saveTask()">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 确认每日小时数修改弹窗 -->
+    <div class="modal-overlay" id="dailyHoursConfirmModal">
+        <div class="modal" style="max-width: 420px;">
+            <div class="modal-header">
+                <h3>确认修改</h3>
+                <button class="modal-close" onclick="cancelDailyHoursChange()">✕</button>
+            </div>
+            <div class="modal-body" style="text-align:center;padding:28px 24px;">
+                <div style="font-size:40px;margin-bottom:12px;">🕐</div>
+                <p style="font-size:15px;color:var(--gray-700);margin:0 0 16px 0;">是否将每日可用时长修改为 <b id="confirmNewHours"></b> 小时？</p>
+                <p style="font-size:12px;color:var(--gray-400);margin:0;">所有任务的建议时长将按比例自动缩放</p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="cancelDailyHoursChange()">取消</button>
+                <button class="btn btn-primary" onclick="confirmSaveDailyHours()">确认保存</button>
             </div>
         </div>
     </div>
@@ -1380,7 +1408,7 @@
                         <div><span class="overload-days">${dayList}${more}</span> 任务总时长超出每日 <b>${maxHrsPerDay}</b> 小时限制</div>
                         <div style="font-size:11px;opacity:.8;margin-top:2px;">已自动拆分每日任务，但总耗时仍超限。建议减少每日任务量或提高每日可用时间</div>
                         <div class="overload-actions">
-                            <button onclick="document.getElementById('sdDailyHours').value='${Math.ceil(Math.max(...overloadedDays.map(d=>d.hours)) * 2) / 2}';showToast('已建议修改每日时长为 ' + document.getElementById('sdDailyHours').value + ' 小时，请重新拆解','info')">🔧 建议调整</button>
+                            <button onclick="const v=Math.ceil(Math.max(...overloadedDays.map(d=>d.hours))*2)/2;document.getElementById('sdDailyHours').value=v;askSaveDailyHours()">🔧 建议调整</button>
                             <button onclick="scrollToOverloadedDays()">📍 查看超时任务</button>
                         </div>
                     </div>
@@ -1716,6 +1744,46 @@
                 closeModal();
                 loadTasks();
             } catch (e) { showToast(e.message || '保存失败', 'error'); }
+        }
+
+        // ========== 每日小时独立设置 ==========
+        let _prevDailyHours = parseFloat(localStorage.getItem('roadmap_daily_hours') || '2.0');
+        let _pendingDailyHours = null;
+
+        function askSaveDailyHours() {
+            const val = parseFloat(document.getElementById('sdDailyHours').value) || 2.0;
+            if (Math.abs(val - _prevDailyHours) < 0.01) return;
+            _pendingDailyHours = val;
+            document.getElementById('confirmNewHours').textContent = val;
+            document.getElementById('dailyHoursConfirmModal').classList.add('active');
+        }
+
+        function cancelDailyHoursChange() {
+            document.getElementById('sdDailyHours').value = _prevDailyHours;
+            _pendingDailyHours = null;
+            document.getElementById('dailyHoursConfirmModal').classList.remove('active');
+        }
+
+        async function confirmSaveDailyHours() {
+            document.getElementById('dailyHoursConfirmModal').classList.remove('active');
+            const val = _pendingDailyHours;
+            _pendingDailyHours = null;
+            if (val == null) return;
+            const oldVal = _prevDailyHours;
+            _prevDailyHours = val;
+            localStorage.setItem('roadmap_daily_hours', val);
+            if (oldVal > 0 && allTasks.length > 0) {
+                const ratio = val / oldVal;
+                const updates = allTasks.filter(t => t.is_daily_task).map(t => {
+                    const oldHrs = parseFloat(t.estimated_hours || 0);
+                    if (!oldHrs) return Promise.resolve();
+                    t.estimated_hours = parseFloat((oldHrs * ratio).toFixed(1));
+                    return api.put('/tasks/' + t.id, { estimated_hours: t.estimated_hours }).catch(() => {});
+                });
+                await Promise.all(updates);
+            }
+            await loadTasks();
+            showToast('每日时长已更新为 ' + val + ' 小时', 'success');
         }
 
         // ========== 初始化 ==========
