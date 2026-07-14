@@ -62,7 +62,7 @@
                     <span class="icon">📅</span> 课表
                 </a>
                 <a href="/courses.html" class="nav-item active">
-                    <span class="icon">📖</span> 知识库
+                    <span class="icon">📖</span> 课程管理
                 </a>
                 <a href="/chat.html" class="nav-item">
                     <span class="icon">💬</span> Agent对话
@@ -211,7 +211,7 @@
                                 <input type="checkbox" ${kbEnabled ? 'checked' : ''} onchange="toggleKb(${course.id}, this.checked)">
                                 <span class="kb-toggle-slider"></span>
                             </label>
-                            <button type="button" class="btn btn-sm btn-primary" onclick="event.stopPropagation(); enterCourse(${course.id})">管理知识库</button>
+                            <button type="button" class="btn btn-sm btn-primary" onclick="event.stopPropagation(); enterCourse(${course.id})">管理课程</button>
                             <button type="button" class="btn btn-sm btn-outline" onclick="event.stopPropagation(); editCourse(${course.id})">编辑</button>
                             ${course.status === 'active'
                                 ? `<button type="button" class="btn btn-sm btn-outline" onclick="event.stopPropagation(); archiveCourse(${course.id})">归档</button>`
