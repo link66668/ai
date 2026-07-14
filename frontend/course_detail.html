@@ -543,12 +543,39 @@
         async function previewDoc(id) {
             try {
                 const doc = allDocs.find(d => d.id === id);
-                const fileType = (doc && doc.file_type || '').toLowerCase();
-                const officeTypes = ['pptx', 'docx', 'xlsx', 'ppt', 'doc', 'xls'];
-                const token = localStorage.getItem('token');
+                if (!doc) { showToast('文档信息不存在', 'error'); return; }
 
-                if (officeTypes.includes(fileType)) {
-                    // Office 文档 → 后端用系统默认应用直接打开
+                const fileType = (doc.file_type || '').toLowerCase();
+                const token = localStorage.getItem('token');
+                const textTypes = ['txt', 'md', 'markdown'];
+                const officeTypes = ['pptx', 'docx', 'xlsx', 'ppt', 'doc', 'xls'];
+
+                if (textTypes.includes(fileType)) {
+                    // 文本/ Markdown → 渲染后弹出
+                    let content = '';
+                    try {
+                        const res = await api.getDocumentMarkdown(id);
+                        content = res.data.content || '';
+                    } catch (_) {
+                        try {
+                            const resp = await fetch(`/api/documents/${id}/raw`, {
+                                headers: { 'Authorization': `Bearer ${token}` }
+                            });
+                            if (resp.ok) content = await resp.text();
+                        } catch (_) {}
+                    }
+                    const previewWin = window.open('', '_blank', 'width=900,height=700');
+                    if (!previewWin) { showToast('请允许浏览器弹窗', 'warning'); return; }
+                    previewWin.document.write(`<html><head><title>${doc.original_name} - 预览</title>
+                        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+                        <style>body{font-family:system-ui,'PingFang SC',sans-serif;max-width:800px;margin:40px auto;padding:0 20px;line-height:1.8;color:#1a1a1a;}
+                        pre{background:#f5f5f5;padding:12px;border-radius:6px;overflow-x:auto;}
+                        table{border-collapse:collapse;width:100%;}td,th{border:1px solid #ddd;padding:8px;}
+                        h1,h2,h3{color:#111;}</style></head>
+                        <body><h1>${doc.original_name}</h1><hr>${markedToHtml(content)}</body></html>`);
+                    previewWin.document.close();
+                } else if (officeTypes.includes(fileType)) {
+                    // Office 文档 → 后端用系统默认应用打开
                     const resp = await fetch(`/api/documents/${id}/open`, {
                         method: 'POST',
                         headers: { 'Authorization': `Bearer ${token}` }
@@ -560,21 +587,21 @@
                         showToast(data.msg || '打开失败', 'error');
                     }
                 } else {
-                    // PDF / 图片 / txt → 浏览器原生渲染
-                    const resp = await fetch(`/api/documents/${id}/raw`, {
-                        headers: { 'Authorization': `Bearer ${token}` }
-                    });
-                    if (!resp.ok) {
-                        const err = await resp.json().catch(() => ({}));
-                        showToast(err.msg || '预览失败', 'error');
-                        return;
+                    // PDF / 图片 → 原始文件流在新标签页展示
+                    try {
+                        const resp = await fetch(`/api/documents/${id}/raw`, {
+                            headers: { 'Authorization': `Bearer ${token}` }
+                        });
+                        if (!resp.ok) throw new Error('文件不可用');
+                        const blob = await resp.blob();
+                        window.open(URL.createObjectURL(blob), '_blank');
+                    } catch (e) {
+                        showToast(e.message === '文件不可用' ? '文件不存在或已被清理' : '预览失败', 'error');
                     }
-                    const blob = await resp.blob();
-                    const url = URL.createObjectURL(blob);
-                    window.open(url, '_blank');
                 }
             } catch (e) {
                 showToast('预览失败: ' + (e.message || e), 'error');
+                console.error('[Preview]', e);
             }
         }
 
@@ -835,6 +862,7 @@
                 const res = await api.getDocumentMarkdown(docId);
                 const content = res.data.content;
                 const w = window.open('', '_blank', 'width=900,height=700');
+                if (!w) { showToast('请允许浏览器弹窗', 'warning'); return; }
                 w.document.write(`<html><head><title>${name} - 知识库预览</title>
                     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
                     <script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js" defer><\/script>
