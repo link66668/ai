@@ -321,3 +321,52 @@ def get_markdown(current_user, doc_id):
         'content': content,
         'filename': doc['original_name'],
     })
+
+
+@document_bp.route('/<int:doc_id>/raw', methods=['GET'])
+@token_required
+def serve_raw_file(current_user, doc_id):
+    """返回原始文件——浏览器原生渲染（PDF/图片/txt）"""
+    doc = Document.find_by_id(doc_id)
+    if not doc:
+        return error_response('资料不存在', 404)
+
+    course = Course.find_by_id(doc['course_id'])
+    if not course or course['user_id'] != current_user['id']:
+        return error_response('无权访问', 403)
+
+    file_path = doc.get('file_path', '')
+    if not file_path or not os.path.isfile(file_path):
+        return error_response('文件不存在或已被清理', 404)
+
+    return send_file(file_path)
+
+
+@document_bp.route('/<int:doc_id>/open', methods=['POST'])
+@token_required
+def open_with_default_app(current_user, doc_id):
+    """用系统默认应用直接打开文件（Office 文档 → PowerPoint/Word/Excel）"""
+    doc = Document.find_by_id(doc_id)
+    if not doc:
+        return error_response('资料不存在', 404)
+
+    course = Course.find_by_id(doc['course_id'])
+    if not course or course['user_id'] != current_user['id']:
+        return error_response('无权访问', 403)
+
+    file_path = doc.get('file_path', '')
+    if not file_path or not os.path.isfile(file_path):
+        return error_response('文件不存在或已被清理', 404)
+
+    try:
+        if os.name == 'nt':          # Windows
+            os.startfile(file_path)
+        elif os.name == 'posix':     # macOS / Linux
+            import subprocess
+            if os.uname().sysname == 'Darwin':
+                subprocess.Popen(['open', file_path])
+            else:
+                subprocess.Popen(['xdg-open', file_path])
+        return success_response(None, '正在打开文件…')
+    except OSError as e:
+        return error_response(f'无法打开文件: {e}', 500)
