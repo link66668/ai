@@ -149,33 +149,51 @@ class ChatEngine:
             temp_text = self._get_temp_file_text(temp_file_session_id)
             image_data = self._get_temp_file_images(temp_file_session_id)
 
+        # ② 图片预处理：有视觉配置时尝试走视觉模型，失败则回退多模态
+        vision_text = ''
+        if image_data and ai_config and ai_config.get('vision_api_key'):
+            vision_text = self._vision_preprocess_images(image_data, ai_config)
+            if vision_text:
+                # 视觉预处理成功 → 图片不再直接传给对话模型
+                image_data = []
+
         messages = []
 
         # ① System prompt
         system_prompt = self._build_system_prompt(
             has_kb=bool(course_id),
-            has_temp_file=bool(temp_text),
-            has_images=bool(image_data),
+            has_temp_file=bool(temp_text or vision_text),
+            has_images=bool(image_data),  # 有图片且未走视觉预处理 → 多模态
             course_id=course_id,
         )
+        if vision_text:
+            system_prompt += (
+                '用户上传的图片已经过视觉模型分析，分析结果在下方附件中。\n'
+                '请根据分析结果回答用户问题。\n'
+            )
         messages.append({'role': 'system', 'content': system_prompt})
 
-        # ② 临时文件上下文（预先注入）
+        # ③ 附件上下文（非图片文本 + 视觉分析结果）
+        attachment_parts = []
         if temp_text:
+            attachment_parts.append(f'【附件内容】（仅限本次对话有效）\n\n{temp_text}')
+        if vision_text:
+            attachment_parts.append(f'【图片分析结果】（视觉模型预处理）\n\n{vision_text}')
+        if attachment_parts:
             messages.append({
                 'role': 'user',
-                'content': f'【附件内容】（仅限本次对话有效）\n\n{temp_text}',
+                'content': '\n\n'.join(attachment_parts),
             })
             messages.append({
                 'role': 'assistant',
                 'content': '好的，我已阅读附件内容。',
             })
 
-        # ③ 对话历史
+        # ④ 对话历史
         if conversation_history:
             messages.extend(conversation_history[-10:])
 
-        # ④ 用户消息
+        # ⑤ 用户消息（有图片且未走视觉 → 多模态；否则纯文本）
         messages.append(self._build_user_message(message, image_data))
 
         return messages
@@ -246,6 +264,40 @@ class ChatEngine:
 
         parts.append({'type': 'text', 'text': message})
         return {'role': 'user', 'content': parts}
+
+    # ==================== 视觉模型预处理 ====================
+
+    def _vision_preprocess_images(self, image_data, ai_config):
+        """
+        将图片发给视觉模型识别，返回识别的文字描述
+
+        如果视觉服务不可用或识别失败，回退到多模态模式（保留 image_data）。
+        调用方检测到返回值非空则用文本，为空则走原有多模态逻辑。
+        """
+        from services.vision_service import vision_service
+
+        descriptions = []
+        for img in image_data:
+            try:
+                # 使用视觉模型识别
+                text = vision_service.recognize_bytes(
+                    img['image_bytes'],
+                    mime_type=img['mime_type'],
+                    ai_config=ai_config,
+                )
+                if text and not text.startswith('[视觉'):
+                    descriptions.append(
+                        f'--- {img["filename"]} ---\n{text}'
+                    )
+                else:
+                    logger.warning(f"[ChatEngine] 视觉识别无结果: {img['filename']}: {text}")
+                    # 视觉失败 → 保留原始图片走多模态
+                    return ''
+            except Exception as e:
+                logger.warning(f"[ChatEngine] 视觉识别失败: {img['filename']}: {e}")
+                return ''
+
+        return '\n\n'.join(descriptions)
 
     # ==================== 临时文件 ====================
 

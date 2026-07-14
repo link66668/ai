@@ -399,6 +399,73 @@ select.form-control {
     gap: 8px;
 }
 
+/* ==================== 今日课程列表（仪表盘） ==================== */
+.today-course-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+}
+
+.today-course-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 0;
+    cursor: pointer;
+    border-bottom: 1px solid var(--border);
+    transition: background 0.15s;
+}
+
+.today-course-item:last-child {
+    border-bottom: none;
+}
+
+.today-course-item:hover {
+    background: var(--bg-hover);
+    margin: 0 -16px;
+    padding-left: 16px;
+    padding-right: 16px;
+    border-radius: 6px;
+}
+
+.today-course-left {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+
+.today-course-name {
+    font-weight: 600;
+    font-size: 14px;
+    color: var(--text);
+}
+
+.today-course-slots {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.today-slot {
+    font-size: 12px;
+    color: var(--primary);
+    background: var(--primary-bg);
+    padding: 2px 8px;
+    border-radius: 4px;
+    white-space: nowrap;
+}
+
+.today-course-right {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 2px;
+    font-size: 12px;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
 /* ==================== 表格 ==================== */
 .table-wrapper {
     overflow-x: auto;
