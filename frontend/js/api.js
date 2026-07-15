@@ -470,6 +470,23 @@ class ApiClient {
     async testAiConfig(type = 'chat') {
         return this.post('/ai-config/test', { type });
     }
+
+    // ========== 数据导出/导入 ==========
+
+    /**
+     * 导出所有用户数据
+     */
+    async exportAllData() {
+        return this.get('/auth/export');
+    }
+
+    /**
+     * 导入用户数据
+     * @param {object} data - 从导出文件解析的完整数据
+     */
+    async importAllData(data) {
+        return this.post('/auth/import', data);
+    }
 }
 
 const api = new ApiClient();

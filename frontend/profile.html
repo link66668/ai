@@ -120,8 +120,12 @@
                 <div class="card-body">
                     <div style="display:flex; gap:12px; flex-wrap:wrap;">
                         <button class="btn btn-outline" onclick="exportData()">📥 导出数据</button>
+                        <button class="btn btn-outline" onclick="importData()">📤 导入数据</button>
                         <button class="btn btn-danger" onclick="clearData()">🗑️ 清除缓存</button>
                     </div>
+                    <p class="text-muted" style="margin-top:10px; font-size:13px;">
+                        导出的 JSON 文件包含所有课程、资料、对话记录、任务、AI 配置及知识库数据，可用于完整恢复。
+                    </p>
                 </div>
             </div>
         </main>
@@ -227,19 +231,9 @@
         // 导出数据
         async function exportData() {
             try {
-                const [coursesRes, tasksRes, chatsRes, plansRes] = await Promise.all([
-                    api.getCourses('all'),
-                    api.getTasks(),
-                    api.getConversations()
-                ]);
-
-                const data = {
-                    courses: coursesRes.data,
-                    tasks: tasksRes.data,
-                    conversations: chatsRes.data,
-                    plans: plansRes.data,
-                    exportTime: new Date().toISOString()
-                };
+                showToast('正在打包数据...', 'info');
+                const result = await api.exportAllData();
+                const data = result.data;
 
                 const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
                 const url = URL.createObjectURL(blob);
@@ -251,8 +245,77 @@
 
                 showToast('导出成功', 'success');
             } catch (error) {
-                showToast('导出失败', 'error');
+                showToast(error.message || '导出失败', 'error');
             }
+        }
+
+        // 导入数据（防重复锁）
+        let _importing = false;
+        async function importData() {
+            if (_importing) {
+                showToast('正在导入中，请稍候...', 'warning');
+                return;
+            }
+
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = '.json';
+            input.style.display = 'none';
+            document.body.appendChild(input);
+
+            let handled = false;
+
+            input.addEventListener('change', async (e) => {
+                if (handled) return;
+                handled = true;
+                document.body.removeChild(input);
+
+                const file = e.target.files[0];
+                if (!file) return;
+
+                if (!confirm('⚠️ 导入将恢复备份中的所有课程、资料、对话记录和任务。\n资料文件将完整还原，现有数据不受影响。\n\n确定继续？')) {
+                    return;
+                }
+
+                _importing = true;
+                try {
+                    const text = await file.text();
+                    const data = JSON.parse(text);
+
+                    if (!data.version || !data.user) {
+                        showToast('无效的备份文件格式', 'error');
+                        return;
+                    }
+
+                    showToast('正在导入数据（较大文件需等待）...', 'info');
+                    const result = await api.importAllData(data);
+                    const summary = result.data;
+
+                    showToast(
+                        `✅ 导入完成: ${summary.courses}门课程, ${summary.documents}个资料, ` +
+                        `${summary.conversations}个对话, ${summary.tasks}个任务`,
+                        'success'
+                    );
+
+                    // 刷新页面数据
+                    loadProfile();
+                    loadStats();
+                } catch (error) {
+                    showToast(error.message || '导入失败，请检查文件格式', 'error');
+                } finally {
+                    _importing = false;
+                }
+            });
+
+            // 用户取消选择也要清理
+            input.addEventListener('cancel', function() {
+                if (!handled) {
+                    handled = true;
+                    if (document.body.contains(input)) document.body.removeChild(input);
+                }
+            });
+
+            input.click();
         }
 
         // 清除缓存
