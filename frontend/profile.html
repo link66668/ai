@@ -15,26 +15,20 @@
             </div>
             <nav class="sidebar-nav">
                 <a href="/dashboard.html" class="nav-item">
-                    <span class="icon">🏠</span> 仪表盘
-                </a>
+                    <span class="icon">🏠</span> 仪表盘                </a>
                 <a href="/schedule.html" class="nav-item">
-                    <span class="icon">📅</span> 课表
-                </a>
+                    <span class="icon">📅</span> 课表                </a>
                 <a href="/courses.html" class="nav-item">
-                    <span class="icon">📖</span> 课程管理
-                </a>
+                    <span class="icon">📖</span> 课程管理                </a>
                 <a href="/chat.html" class="nav-item">
-                    <span class="icon">💬</span> Agent对话
-                </a>
+                    <span class="icon">💬</span> Agent对话                </a>
                 <a href="/tasks.html" class="nav-item">
-                    <span class="icon">✅</span> 任务管理
-                </a>
+                    <span class="icon">✅</span> 任务管理                </a>
                 <a href="/ai_settings.html" class="nav-item">
                     <span class="icon">🤖</span> AI 配置
                 </a>
                 <a href="/profile.html" class="nav-item active">
-                    <span class="icon">👤</span> 个人中心
-                </a>
+                    <span class="icon">👤</span> 个人中心                </a>
             </nav>
             <div class="sidebar-footer">
                 <button class="btn btn-outline btn-block" onclick="logout()">退出登录</button>
@@ -91,29 +85,29 @@
                 </div>
             </div>
 
-            <!-- 数据统计 -->
+            <!-- 数据统计（可点击跳转） -->
             <div class="card mb-3">
                 <div class="card-header">
                     <h3>我的数据</h3>
                 </div>
                 <div class="card-body">
                     <div class="stat-grid">
-                        <div class="stat-card">
+                        <a href="/courses.html" class="stat-card stat-link">
                             <h4>课程数量</h4>
                             <div class="stat-value" id="statCourses">0</div>
-                        </div>
-                        <div class="stat-card">
+                        </a>
+                        <a href="/courses.html" class="stat-card stat-link">
                             <h4>资料数量</h4>
                             <div class="stat-value" id="statDocs">0</div>
-                        </div>
-                        <div class="stat-card">
+                        </a>
+                        <a href="/chat.html" class="stat-card stat-link">
                             <h4>对话数量</h4>
                             <div class="stat-value" id="statChats">0</div>
-                        </div>
-                        <div class="stat-card">
+                        </a>
+                        <a href="/tasks.html" class="stat-card stat-link">
                             <h4>任务数量</h4>
                             <div class="stat-value" id="statTasks">0</div>
-                        </div>
+                        </a>
                     </div>
                 </div>
             </div>
